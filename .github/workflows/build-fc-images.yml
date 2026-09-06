@@ -1,0 +1,85 @@
+name: build-fc-images
+
+# Bakes and publishes boxctl-vms's own Firecracker rootfs images (desktop,
+# debian-slim) to Cloudflare R2 on every change to their bake/publish
+# scripts -- no more hand-running scripts/images/bake-*.sh and
+# publish-*.sh over SSH on aimax for a routine rebuild.
+#
+# runs-on: onctl-4 (this repo's own onctl-runners pool, already used by
+# build-image.yml) rather than a new dedicated self-hosted runner like
+# onctl-runners' own build-fc-runner-image.yml uses. Verified live before
+# writing this: debootstrap + loop-mount + chroot all work fine inside an
+# onctl-4 job (it's a real VM with root + loop devices, confirmed via a
+# throwaway `onctl create -p fc` + `mkfs.ext4`/`mount -o loop` round-trip)
+# -- no KVM needed for baking. What onctl-4 can NOT do is a real
+# boot-smoke-test: `/dev/kvm` doesn't exist inside it (confirmed the same
+# way), since it's itself a Firecracker guest with no nested
+# virtualization configured. So this workflow deliberately stops at
+# "bake, static-check, publish" -- booting a real VM from a freshly
+# published image to confirm it works is still a manual step run directly
+# on aimax bare metal (see scripts/images/bake-*-image.sh's own "Test
+# directly with: onctl create ..." footer).
+#
+# Each image's bake/publish scripts are named bake-<image>-image.sh /
+# publish-<image>-image.sh, so the matrix below drives both without any
+# new per-image script.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/images/bake-desktop-image.sh"
+      - "scripts/images/bake-debian-slim-image.sh"
+      - "scripts/images/publish-desktop-image.sh"
+      - "scripts/images/publish-debian-slim-image.sh"
+      - ".github/workflows/build-fc-images.yml"
+  workflow_dispatch: {}
+
+jobs:
+  bake-and-publish:
+    name: Bake + publish (${{ matrix.image }})
+    runs-on: onctl-4
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [desktop, debian-slim]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Install rclone
+        # rclone's own install.sh exits 3 (not 0) when already up to date --
+        # harmless here since this is a fresh VM per job, but matches
+        # onctl-runners' build-fc-runner-image.yml's same guard in case a
+        # future onctl-4 image ever ships it preinstalled.
+        run: command -v rclone >/dev/null 2>&1 || curl https://rclone.org/install.sh | sudo bash
+
+      - name: Bake ${{ matrix.image }} image
+        run: sudo bash "scripts/images/bake-${{ matrix.image }}-image.sh"
+
+      - name: Static smoke test
+        # Loop-mounts the freshly baked image read-only and asserts the one
+        # thing every bake script writes on success (the /opt/.baked
+        # marker) -- catches "the bake silently failed partway through" or
+        # "wrote to the wrong path" before it's ever published. Not a real
+        # boot test (see this workflow's header comment for why that can't
+        # run here) -- deliberately cheap and fast.
+        run: |
+          set -euo pipefail
+          IMAGE="/opt/fc/images/${{ matrix.image }}.ext4"
+          MOUNT=$(mktemp -d)
+          sudo mount -o loop,ro "$IMAGE" "$MOUNT"
+          trap 'sudo umount "$MOUNT"' EXIT
+          test -e "$MOUNT/opt/.baked" || { echo "FAIL: /opt/.baked marker missing from $IMAGE" >&2; exit 1; }
+          echo "OK: /opt/.baked present in $IMAGE"
+
+      - name: Publish ${{ matrix.image }} image to R2
+        env:
+          CF_ACCESS_KEY: ${{ secrets.CF_ACCESS_KEY }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+          CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
+        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash "scripts/images/publish-${{ matrix.image }}-image.sh"
