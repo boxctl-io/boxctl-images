@@ -138,10 +138,23 @@ exec startxfce4
 XSTARTUP
 chmod +x "$MOUNT/root/.vnc/xstartup"
 
-# -localhost yes + -SecurityTypes None: the VNC port is not reachable from
-# outside the VM's own loopback -- an SSH port-forward (today) or
-# boxctl-vms's ticket-gated tunnel (once built) is the actual access
-# control, not a second password prompt in the VNC client.
+# -localhost no (explicit, not just omitted -- see below) + -SecurityTypes
+# None: the browser-facing tunnel (internal/vm/agent.go's TunnelKindVNC,
+# cmd/vms-terminal-agent) dials this VM's real IP:5901 directly from
+# aimax's own network namespace, not through an SSH session into the VM
+# -- so leaving TigerVNC's own localhost-only default in place would make
+# it genuinely unreachable, not just untested. Confirmed live twice: a VM
+# booted from a build with -localhost yes refused the tunnel's connection
+# ("connect: connection refused"); simply *omitting* the flag on a rebake
+# did NOT fix it -- `ps aux` on the resulting VM still showed the actual
+# Xtigervnc process running with -localhost=1, because TigerVNC's
+# `vncserver` wrapper script defaults to localhost-only internally
+# regardless of whether the flag is passed at all. -localhost no is the
+# only way to actually disable it. The ticket-gated tunnel (not
+# -localhost) is the real access control here, matching -SecurityTypes
+# None's own reasoning -- so this is a real exposure on aimax's fcbr0/
+# fcbr-vms bridge network, not the public internet, same trust level
+# every VM's SSH port already has there.
 cat <<'UNIT' > "$MOUNT/etc/systemd/system/vncserver@.service"
 [Unit]
 Description=TigerVNC server on display %i
@@ -151,7 +164,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/bin/vncserver -fg -localhost yes -SecurityTypes None :%i
+ExecStart=/usr/bin/vncserver -fg -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE :%i
 ExecStop=/usr/bin/vncserver -kill :%i
 Restart=on-failure
 
