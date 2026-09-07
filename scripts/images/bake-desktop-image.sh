@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bakes a clean, minimal Firecracker rootfs with an XFCE desktop + TigerVNC
-# server baked in, for browser-based GUI access to a boxctl VM -- see
+# server + Firefox baked in, for browser-based GUI access to a boxctl VM -- see
 # docs/plans/gui-desktop-vnc-access.md. Deliberately does NOT start from
 # onctl-runners' runner-base-docker.ext4 (the image boxctl VMs currently
 # share with that project): a GUI desktop VM has no use for the GH Actions
@@ -122,6 +122,28 @@ chroot "$MOUNT" apt-get update -qq
 chroot "$MOUNT" apt-get install -y -qq --no-install-recommends apt-utils >/dev/null
 chroot "$MOUNT" apt-get install -y -qq xfce4 xfce4-terminal dbus-x11 tigervnc-standalone-server >/dev/null
 
+# Ubuntu 24.04's own "firefox" package is a transitional stub that pulls
+# the snap -- snapd's squashfs-mount + confinement machinery is a poor
+# fit for a minimal debootstrap rootfs booted as a Firecracker microVM,
+# so this installs real Firefox from Mozilla's own apt repo instead (the
+# officially documented snap-free install path, see
+# https://support.mozilla.org/kb/install-firefox-linux). The pin file
+# guarantees apt keeps preferring this package over Ubuntu's snap
+# wrapper on every future `apt upgrade`, not just this one install.
+say "installing Firefox (Mozilla's own apt repo, not Ubuntu's snap-wrapper package)"
+mkdir -p "$MOUNT/etc/apt/keyrings"
+curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg -o "$MOUNT/etc/apt/keyrings/packages.mozilla.org.asc"
+cat <<'EOF' > "$MOUNT/etc/apt/sources.list.d/mozilla.list"
+deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
+EOF
+cat <<'EOF' > "$MOUNT/etc/apt/preferences.d/mozilla"
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000
+EOF
+chroot "$MOUNT" apt-get update -qq
+chroot "$MOUNT" apt-get install -y -qq firefox >/dev/null
+
 say "enabling SSH"
 chroot "$MOUNT" systemctl enable ssh
 # Pre-generate host keys so sshd starts immediately at boot instead of
@@ -194,7 +216,7 @@ mv "$BUILD_IMAGE" "$IMAGE"
 # makes the whole script exit non-zero even after a fully successful build.
 trap - EXIT
 
-say "done -- XFCE desktop + TigerVNC baked into $IMAGE"
+say "done -- XFCE desktop + TigerVNC + Firefox baked into $IMAGE"
 echo ""
 echo "Test directly (before boxctl-vms's image= plumbing exists) with:"
 echo "  onctl create -n desktoptest -p fc --rootfs-image $IMAGE"
