@@ -33,8 +33,10 @@ on:
     paths:
       - "scripts/images/bake-desktop-image.sh"
       - "scripts/images/bake-debian-slim-image.sh"
+      - "scripts/images/bake-vscode-image.sh"
       - "scripts/images/publish-desktop-image.sh"
       - "scripts/images/publish-debian-slim-image.sh"
+      - "scripts/images/publish-vscode-image.sh"
       - ".github/workflows/build-fc-images.yml"
   workflow_dispatch: {}
 
@@ -46,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [desktop, debian-slim]
+        image: [desktop, debian-slim, vscode]
     steps:
       - name: Check out code
         uses: actions/checkout@v7
