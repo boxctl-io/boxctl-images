@@ -11,7 +11,7 @@
 # bake-desktop-image.sh's root-only setup: VS Code (an Electron app) warns
 # about / restricts running as root's sandbox, and several XFCE session
 # components (dbus, polkit) misbehave under root too. Instead this creates
-# a regular sudo-capable user ("coder", uid 1000, NOPASSWD sudo -- the VNC
+# a regular sudo-capable user ("boxctl", uid 1000, NOPASSWD sudo -- the VNC
 # tunnel and SSH already grant root-equivalent access at the same trust
 # boundary, so this isn't a downgrade) and runs the VNC server, and
 # everything launched from the desktop including VS Code, as that user.
@@ -39,8 +39,8 @@ IMAGE="$IMAGE_DIR/vscode.ext4"
 BUILD_IMAGE="$IMAGE.building"
 MOUNT="/mnt/fc-rootfs-vscode"
 CACHE_DIR="/opt/fc/cache"
-CODER_USER="coder"
-CODER_UID=1000
+BOXCTL_USER="boxctl"
+BOXCTL_UID=1000
 mkdir -p "$CACHE_DIR"
 
 say "installing build deps"
@@ -139,17 +139,17 @@ EOF
 chroot "$MOUNT" apt-get update -qq
 chroot "$MOUNT" apt-get install -y -qq code >/dev/null
 
-say "creating regular desktop user ($CODER_USER, uid $CODER_UID, NOPASSWD sudo)"
-chroot "$MOUNT" useradd -m -u "$CODER_UID" -s /bin/bash -G sudo "$CODER_USER"
+say "creating regular desktop user ($BOXCTL_USER, uid $BOXCTL_UID, NOPASSWD sudo)"
+chroot "$MOUNT" useradd -m -u "$BOXCTL_UID" -s /bin/bash -G sudo "$BOXCTL_USER"
 # No password set -- NOPASSWD sudo below plus the ticket-gated VNC/SSH
 # tunnels are the actual access control here (same trust boundary root SSH
 # already has on every other boxctl image), so there's no login prompt
 # this account ever needs to answer.
-chroot "$MOUNT" passwd -l "$CODER_USER" >/dev/null
-cat <<EOF > "$MOUNT/etc/sudoers.d/90-$CODER_USER"
-$CODER_USER ALL=(ALL) NOPASSWD:ALL
+chroot "$MOUNT" passwd -l "$BOXCTL_USER" >/dev/null
+cat <<EOF > "$MOUNT/etc/sudoers.d/90-$BOXCTL_USER"
+$BOXCTL_USER ALL=(ALL) NOPASSWD:ALL
 EOF
-chmod 0440 "$MOUNT/etc/sudoers.d/90-$CODER_USER"
+chmod 0440 "$MOUNT/etc/sudoers.d/90-$BOXCTL_USER"
 
 say "enabling SSH"
 chroot "$MOUNT" systemctl enable ssh
@@ -157,23 +157,29 @@ chroot "$MOUNT" systemctl enable ssh
 # blocking on kernel entropy for fresh key generation.
 chroot "$MOUNT" ssh-keygen -A -q
 
-say "configuring VNC for $CODER_USER, not root (see this script's header)"
-mkdir -p "$MOUNT/home/$CODER_USER/.vnc"
-cat <<'XSTARTUP' > "$MOUNT/home/$CODER_USER/.vnc/xstartup"
+say "configuring VNC for $BOXCTL_USER, not root (see this script's header)"
+mkdir -p "$MOUNT/home/$BOXCTL_USER/.vnc"
+cat <<'XSTARTUP' > "$MOUNT/home/$BOXCTL_USER/.vnc/xstartup"
 #!/bin/bash
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 exec startxfce4
 XSTARTUP
-chmod +x "$MOUNT/home/$CODER_USER/.vnc/xstartup"
-chroot "$MOUNT" chown -R "$CODER_USER:$CODER_USER" "/home/$CODER_USER/.vnc"
+chmod +x "$MOUNT/home/$BOXCTL_USER/.vnc/xstartup"
+chroot "$MOUNT" chown -R "$BOXCTL_USER:$BOXCTL_USER" "/home/$BOXCTL_USER/.vnc"
 
 # Same -localhost no / -SecurityTypes None reasoning as
 # bake-desktop-image.sh's unit (see that script's header comment for the
-# live-tested findings behind both flags) -- just running as $CODER_USER
+# live-tested findings behind both flags) -- just running as $BOXCTL_USER
 # instead of root. There's no display manager / PAM login session here
 # (systemd launches vncserver directly), so XDG_RUNTIME_DIR is created
-# explicitly before startxfce4's dbus/polkit need it.
+# explicitly before startxfce4's dbus/polkit need it -- the two
+# ExecStartPre lines need their leading "+" (run as root, overriding this
+# unit's own User=) because /run/user is root-owned/non-writable by other
+# users; without it, systemd runs ExecStartPre as $BOXCTL_USER same as the
+# main process, and `mkdir /run/user/$BOXCTL_UID` fails with "Permission
+# denied" -- confirmed live (crash-looped: "Start request repeated too
+# quickly").
 cat <<UNIT > "$MOUNT/etc/systemd/system/vncserver@.service"
 [Unit]
 Description=TigerVNC server on display %i
@@ -181,14 +187,14 @@ After=network.target
 
 [Service]
 Type=simple
-User=$CODER_USER
-Group=$CODER_USER
-WorkingDirectory=/home/$CODER_USER
-Environment=HOME=/home/$CODER_USER
-Environment=USER=$CODER_USER
-Environment=XDG_RUNTIME_DIR=/run/user/$CODER_UID
-ExecStartPre=/bin/mkdir -p /run/user/$CODER_UID
-ExecStartPre=/bin/chown $CODER_USER:$CODER_USER /run/user/$CODER_UID
+User=$BOXCTL_USER
+Group=$BOXCTL_USER
+WorkingDirectory=/home/$BOXCTL_USER
+Environment=HOME=/home/$BOXCTL_USER
+Environment=USER=$BOXCTL_USER
+Environment=XDG_RUNTIME_DIR=/run/user/$BOXCTL_UID
+ExecStartPre=+/bin/mkdir -p /run/user/$BOXCTL_UID
+ExecStartPre=+/bin/chown $BOXCTL_USER:$BOXCTL_USER /run/user/$BOXCTL_UID
 ExecStart=/usr/bin/vncserver -fg -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE :%i
 ExecStop=/usr/bin/vncserver -kill :%i
 Restart=on-failure
@@ -219,7 +225,7 @@ mv "$BUILD_IMAGE" "$IMAGE"
 # whole script exit non-zero even after a fully successful build.
 trap - EXIT
 
-say "done -- XFCE desktop + TigerVNC (as $CODER_USER) + VS Code + Python3/pip baked into $IMAGE"
+say "done -- XFCE desktop + TigerVNC (as $BOXCTL_USER) + VS Code + Python3/pip baked into $IMAGE"
 echo ""
 echo "Test directly (before boxctl-vms's image= plumbing exists) with:"
 echo "  onctl create -n vscodetest -p fc --rootfs-image $IMAGE"
