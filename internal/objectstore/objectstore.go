@@ -76,12 +76,27 @@ func (s *Store) PresignPut(ctx context.Context, key string, expiry time.Duration
 	return req.URL, nil
 }
 
-// PresignGet is PresignPut's download-side counterpart.
-func (s *Store) PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error) {
-	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
+// PresignGet is PresignPut's download-side counterpart. filename, when
+// non-empty, sets the response's Content-Disposition (as
+// "attachment; filename=..."), so a browser navigating straight to the
+// URL (e.g. after a 302 redirect from cmd/server's handleExportStatus)
+// triggers an actual file download with a sensible name instead of
+// trying to render R2's response inline or saving it under the bucket
+// key's own name -- R2/S3 both let a presigned GET override this
+// per-request via response-content-disposition without the object
+// itself needing that header set at upload time. Pass "" for a
+// caller that doesn't need this (e.g. the agent's own GET-and-Patch
+// during import, which never touches a browser).
+func (s *Store) PresignGet(ctx context.Context, key string, expiry time.Duration, filename string) (string, error) {
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
-	}, s3.WithPresignExpires(expiry))
+	}
+	if filename != "" {
+		input.ResponseContentDisposition = aws.String(fmt.Sprintf("attachment; filename=%q", filename))
+		input.ResponseContentType = aws.String("application/zstd")
+	}
+	req, err := s.presign.PresignGetObject(ctx, input, s3.WithPresignExpires(expiry))
 	if err != nil {
 		return "", fmt.Errorf("objectstore: presign get %s: %w", key, err)
 	}
