@@ -71,7 +71,7 @@ func TestPresignPut(t *testing.T) {
 
 func TestPresignGet(t *testing.T) {
 	s := testStore(t)
-	rawURL, err := s.PresignGet(context.Background(), "imports/owner/upload-456.tar.zst", 15*time.Minute)
+	rawURL, err := s.PresignGet(context.Background(), "imports/owner/upload-456.tar.zst", 15*time.Minute, "")
 	if err != nil {
 		t.Fatalf("PresignGet: %v", err)
 	}
@@ -86,6 +86,29 @@ func TestPresignGet(t *testing.T) {
 	if u.Query().Get("X-Amz-Signature") == "" {
 		t.Error("missing X-Amz-Signature -- URL doesn't look presigned")
 	}
+	if u.Query().Get("response-content-disposition") != "" {
+		t.Error("empty filename should not set response-content-disposition")
+	}
+}
+
+func TestPresignGet_WithFilename(t *testing.T) {
+	s := testStore(t)
+	rawURL, err := s.PresignGet(context.Background(), "exports/vm-123.tar.zst", 15*time.Minute, "vm-123.tar.zst")
+	if err != nil {
+		t.Fatalf("PresignGet: %v", err)
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("presigned URL %q did not parse: %v", rawURL, err)
+	}
+	wantDisposition := `attachment; filename="vm-123.tar.zst"`
+	if got := u.Query().Get("response-content-disposition"); got != wantDisposition {
+		t.Errorf("response-content-disposition = %q, want %q", got, wantDisposition)
+	}
+	if got := u.Query().Get("response-content-type"); got != "application/zstd" {
+		t.Errorf("response-content-type = %q, want application/zstd", got)
+	}
 }
 
 func TestPresignPutAndGet_DifferentSignatures(t *testing.T) {
@@ -94,7 +117,7 @@ func TestPresignPutAndGet_DifferentSignatures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PresignPut: %v", err)
 	}
-	getURL, err := s.PresignGet(context.Background(), "same-key", time.Minute)
+	getURL, err := s.PresignGet(context.Background(), "same-key", time.Minute, "")
 	if err != nil {
 		t.Fatalf("PresignGet: %v", err)
 	}
