@@ -103,6 +103,26 @@ func (s *Store) PresignGet(ctx context.Context, key string, expiry time.Duration
 	return req.URL, nil
 }
 
+// Size returns key's exact object size in the bucket -- used to answer
+// "how big is this download" (see cmd/server's handleExportStatus)
+// without the client ever HEADing the presigned GET URL itself: R2/S3's
+// presigned-URL signature covers the HTTP method, so a URL presigned for
+// GET rejects a HEAD against it with 403 (confirmed live) -- HeadObject
+// with this Store's own real credentials has no such restriction.
+func (s *Store) Size(ctx context.Context, key string) (int64, error) {
+	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("objectstore: head %s: %w", key, err)
+	}
+	if out.ContentLength == nil {
+		return 0, fmt.Errorf("objectstore: head %s: no content-length in response", key)
+	}
+	return *out.ContentLength, nil
+}
+
 // Delete removes key from the bucket -- called once a transfer's object
 // is known to no longer be needed (see docs/plans/s3-transfer.md's
 // cleanup section for which side does this for export vs. import). Not
