@@ -17,7 +17,7 @@
 # boundary, so this isn't a downgrade) and runs the VNC server, and
 # everything launched from the desktop including VS Code, as that user.
 # Root SSH stays exactly as every other boxctl image has it (untouched) --
-# the terminal tunnel (cmd/vms-terminal-agent) always connects as
+# the terminal tunnel (cmd/boxctl-tunnel-agent) always connects as
 # root@<vm-ip> regardless of image, so this doesn't touch sshd_config or
 # root's own access at all.
 #

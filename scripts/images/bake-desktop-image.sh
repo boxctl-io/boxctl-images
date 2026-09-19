@@ -162,7 +162,7 @@ chmod +x "$MOUNT/root/.vnc/xstartup"
 
 # -localhost no (explicit, not just omitted -- see below) + -SecurityTypes
 # None: the browser-facing tunnel (internal/vm/agent.go's TunnelKindVNC,
-# cmd/vms-terminal-agent) dials this VM's real IP:5901 directly from
+# cmd/boxctl-tunnel-agent) dials this VM's real IP:5901 directly from
 # aimax's own network namespace, not through an SSH session into the VM
 # -- so leaving TigerVNC's own localhost-only default in place would make
 # it genuinely unreachable, not just untested. Confirmed live twice: a VM
