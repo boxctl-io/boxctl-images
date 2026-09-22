@@ -120,7 +120,28 @@ rclone lsf "r2:$BUCKET/images/" | grep -F "$(basename "$DEST_KEY")" >/dev/null |
   exit 1
 }
 
-say "updating stable pointer r2:$BUCKET/$STABLE_KEY"
-rclone copyto "r2:$BUCKET/$DEST_KEY" "r2:$BUCKET/$STABLE_KEY"
+# images/latest/ is not an alias -- S3 and R2 have no such thing. It is a
+# second, complete copy of the object, and R2 duplicates the bytes
+# internally at roughly 18 MiB/s (measured: 7s for debian-slim's 135 MB,
+# 43s for desktop's 751 MB, ~60s for vscode's 1.13 GB). Nothing crosses
+# this host's uplink -- rclone issues a server-side CopyObject -- but it
+# is still real time and real duplicated storage every publish.
+#
+# So don't pay it when the pointer already holds this exact image, which
+# is the case for any re-publish that wasn't preceded by a bake. The
+# object's own sha256 metadata answers that without downloading it; an
+# object published before that metadata existed reports nothing here and
+# is copied over, which is the safe direction.
+say "checking what r2:$BUCKET/$STABLE_KEY currently holds"
+LATEST_SHA=$(rclone lsjson --metadata "r2:$BUCKET/$STABLE_KEY" 2>/dev/null \
+  | tr ',' '\n' \
+  | sed -n 's/.*"[Ss]ha256"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' \
+  | head -1)
+if [ "$LATEST_SHA" = "$IMAGE_SHA" ]; then
+  say "stable pointer already holds this image -- skipping the copy"
+else
+  say "updating stable pointer r2:$BUCKET/$STABLE_KEY"
+  rclone copyto --header-upload "X-Amz-Meta-Sha256: $IMAGE_SHA" "r2:$BUCKET/$DEST_KEY" "r2:$BUCKET/$STABLE_KEY"
+fi
 
 say "PASS — published to r2:$BUCKET/$DEST_KEY (and r2:$BUCKET/$STABLE_KEY)"

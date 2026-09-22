@@ -79,6 +79,33 @@ digest from a failed restore into the R2 key, and optionally a presigned
 URL plus the command to place that generation on a host *under a name of
 its own*, never on top of the current image.
 
+## The `latest/` pointer is a copy, not an alias
+
+S3 and R2 have no aliases, so `images/latest/debian-slim.ext4.zst` --
+what `internal/vm/images.go`'s `ImageObjectKey` fetches a missing image
+from -- is a second, complete copy of the object. R2 duplicates it
+internally at roughly 18 MiB/s (measured on 2026-09-22: 7s for
+debian-slim's 135 MB, 43s for desktop's 751 MB, ~60s for vscode's
+1.13 GB). Nothing crosses the publishing host's uplink, since rclone
+issues a server-side `CopyObject`, but it is real time on every publish
+and real duplicated storage: `images/latest/` was 1.88 GiB of the
+bucket's 21.75 GiB.
+
+Publish now skips that copy when the pointer already holds the same
+image, which the object's own sha256 metadata settles without
+downloading it. That covers every re-publish not preceded by a bake --
+including the "re-publish the current generations" step below, which
+is otherwise pure duplication of bytes R2 already has.
+
+A genuinely changed image still pays one copy. Removing that too means
+making `latest` a real pointer -- a ~60-byte object holding the target
+key -- which halves the storage and makes the update instant, at the
+cost of teaching its two consumers to resolve it: `ImageObjectKey` (the
+controller would read the pointer and presign the target, leaving
+`fetch-image.sh` untouched) and `mint-*-image-link.sh`. Worth doing
+separately from the digest-naming work, since it touches the host image
+sync path.
+
 ## Migration
 
 Objects published before this are timestamped, so they can't be found by
