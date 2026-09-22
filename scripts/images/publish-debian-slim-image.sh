@@ -75,12 +75,19 @@ say "compressed size: $(du -h "$COMPRESSED" | cut -f1)"
 # rootfsdiff.Identity). A timestamp told you when a generation was
 # published but not which one a given backup needs, so restoring a
 # diff-mode bundle after a re-bake meant downloading and hashing
-# candidates at 4-20 GiB a go. Named this way the lookup is a prefix
-# search (scripts/images/find-image-by-sha.sh), or a direct GET when the
-# caller already knows the image name. R2 keeps the publish time on the
-# object itself, so nothing is lost by dropping it from the key, and
+# candidates at 4-20 GiB a go. R2 keeps the publish time on the object
+# itself, so nothing is lost by dropping it from the key, and
 # re-publishing identical bytes is now idempotent rather than a new
 # object each time.
+#
+# Short-form digest in the name, git-style, because these names are read
+# by people; the *full* digest rides along as object metadata
+# (x-amz-meta-sha256), so the object still carries its own proof of
+# identity and find-image-by-sha.sh can check a full digest against it
+# without downloading 4-20 GiB. 7 hex is 28 bits: with even a few
+# hundred published generations a collision is a ~1-in-10^4 event, and
+# it would be caught -- fetch-image.sh hashes what it downloads, and
+# rootfsdiff.Identity re-verifies before any diff is applied.
 IMAGE_SHA=""
 if [ -r "$IMAGE.sha256sum" ]; then
   read -r sidecar_sha sidecar_size _ <"$IMAGE.sha256sum" || true
@@ -93,11 +100,14 @@ if [ -z "$IMAGE_SHA" ]; then
   IMAGE_SHA=$(sha256sum "$IMAGE" | awk '{print $1}')
 fi
 say "image sha256: $IMAGE_SHA"
-DEST_KEY="images/debian-slim.ext4-$IMAGE_SHA.zst"
+SHORT_SHA=${IMAGE_SHA:0:7}
+DEST_KEY="images/debian-slim.ext4-$SHORT_SHA.zst"
 STABLE_KEY="images/latest/debian-slim.ext4.zst"
 
 say "uploading to r2:$BUCKET/$DEST_KEY"
-rclone copyto "$COMPRESSED" "r2:$BUCKET/$DEST_KEY"
+# The full digest travels with the object, so a short name never has to
+# be trusted on its own.
+rclone copyto --header-upload "X-Amz-Meta-Sha256: $IMAGE_SHA" "$COMPRESSED" "r2:$BUCKET/$DEST_KEY"
 
 say "verifying upload"
 rclone lsf "r2:$BUCKET/images/" | grep -F "$(basename "$DEST_KEY")" >/dev/null || {

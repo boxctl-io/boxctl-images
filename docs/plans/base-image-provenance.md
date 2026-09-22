@@ -45,11 +45,22 @@ refuses.
 ## What landed
 
 **Published objects are named after the image's own sha256**, the same
-digest a manifest records: `images/debian-slim.ext4-<sha256>.zst`. A
-lookup is now a prefix search instead of a hunt. Re-publishing identical
-bytes is idempotent (same key) rather than accumulating a new object per
-run, and R2 still carries the publish time on the object itself, so
-dropping the timestamp from the key loses nothing.
+digest a manifest records -- short-form, git-style, because these names
+are read by people: `images/debian-slim.ext4-82c2ebd.zst`. A lookup is
+now a prefix match instead of a hunt. Re-publishing identical bytes is
+idempotent (same key) rather than accumulating a new object per run, and
+R2 still carries the publish time on the object itself, so dropping the
+timestamp from the key loses nothing.
+
+The **full** digest rides along as object metadata
+(`x-amz-meta-sha256`), because a 7-hex name is a label, not a proof: it
+lets `find-image-by-sha.sh` hold an object to a full digest without
+downloading 4-20 GiB. 7 hex is 28 bits, so even a few hundred
+generations make a collision a ~1-in-10^4 event, and one would be caught
+anyway -- `fetch-image.sh` hashes what it downloads and
+`rootfsdiff.Identity` re-verifies before any diff is applied. Git makes
+the same split, in the other direction: full digest canonical, short for
+reading. Here the name is the short form and the metadata is canonical.
 
 **`bake-*-image.sh` writes the identity sidecar** (`<image>.sha256sum`,
 holding `<sha256> <size> <mtime-nanos>`) the moment the image lands.
@@ -94,8 +105,10 @@ every piece already exists:
 1. `Patch` fails with `no local base image matches sha256 <sha>`. Give
    that failure a typed error carrying the digest rather than a string.
 2. The controller constructs the key from the manifest's own
-   `baseImagePath` basename plus the digest
-   (`images/<basename>-<sha>.zst`) -- a direct GET, no listing -- and
+   `baseImagePath` basename plus the digest's first 7 hex
+   (`images/<basename>-<sha7>.zst`) -- a direct GET, no listing -- then
+   confirms the object's `sha256` metadata against the full digest
+   before spending a download on it -- and
    dispatches the existing `fetch-image.sh` agent job (already built for
    `POST /admin/hosts/{name}/images/sync`, already tolerant of multi-GiB
    downloads at `imageFetchTimeout` 45m).

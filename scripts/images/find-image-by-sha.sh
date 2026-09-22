@@ -5,9 +5,10 @@
 # has that generation ("no local base image matches sha256 ...", see
 # internal/vmbundle's resolveBaseImage).
 #
-# Since publish-*-image.sh names every object after that digest, this is
-# a prefix search rather than a download-and-hash hunt through every
-# generation ever published.
+# publish-*-image.sh names every object after the first 7 hex of that
+# digest and attaches the full one as object metadata, so this is a
+# prefix match plus a metadata check -- not a download-and-hash hunt
+# through every generation ever published.
 #
 #   bash scripts/images/find-image-by-sha.sh <sha256>           # print the key
 #   bash scripts/images/find-image-by-sha.sh <sha256> --link    # + presigned URL
@@ -44,6 +45,11 @@ case "$SHA" in
 esac
 SHA=$(echo "$SHA" | tr '[:upper:]' '[:lower:]')
 EXPIRE="${3:-1h}"
+# Object names carry only the first 7 hex (see publish-*-image.sh), so a
+# full digest -- which is what a failed restore hands you -- is matched
+# on its first 7 and then confirmed against the object's own metadata
+# below. A shorter argument than that stays a plain prefix match.
+NEEDLE=${SHA:0:7}
 
 command -v rclone >/dev/null 2>&1 || {
   echo "rclone not found — install with: curl https://rclone.org/install.sh | sudo bash" >&2
@@ -70,8 +76,8 @@ export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$CF_SECRET_ACCESS_KEY"
 export RCLONE_CONFIG_R2_ENDPOINT="$CF_S3_ENDPOINT"
 export RCLONE_S3_NO_CHECK_BUCKET=true
 
-say "searching r2:$BUCKET/images/ for an object named after $SHA"
-MATCHES=$(rclone lsf "r2:$BUCKET/images/" | grep -- "-${SHA}[0-9a-f]*\.zst\$" || true)
+say "searching r2:$BUCKET/images/ for an object named after $NEEDLE"
+MATCHES=$(rclone lsf "r2:$BUCKET/images/" | grep -- "-${NEEDLE}[0-9a-f]*\.zst\$" || true)
 if [ -z "$MATCHES" ]; then
   echo "no published image matches sha256 $SHA" >&2
   echo "  (objects published before sha-named keys are timestamped instead -- list them with: rclone lsl r2:$BUCKET/images/)" >&2
@@ -84,6 +90,25 @@ if [ "$(echo "$MATCHES" | wc -l)" -gt 1 ]; then
 fi
 
 KEY="images/$MATCHES"
+
+# A 7-hex name is a label, not a proof. When the caller passed the whole
+# digest, hold the object to it: publish attaches the full sha256 as
+# metadata, so this settles identity without fetching the object. An
+# older object published before that metadata existed can't be checked
+# here -- say so rather than implying it was verified.
+if [ "${#SHA}" -eq 64 ]; then
+  OBJ_SHA=$(rclone lsjson --metadata "r2:$BUCKET/$KEY" 2>/dev/null \
+    | tr ',' '\n' | sed -n 's/.*"[Ss]ha256"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' | head -1)
+  if [ -z "$OBJ_SHA" ]; then
+    say "note: $KEY carries no sha256 metadata (published before that existed) -- name matched, content unverified"
+  elif [ "$OBJ_SHA" != "$SHA" ]; then
+    echo "$KEY matches the short name but its recorded sha256 is $OBJ_SHA, not $SHA" >&2
+    exit 1
+  else
+    say "full digest confirmed against the object's metadata"
+  fi
+fi
+
 echo "$KEY"
 
 if [ "$MODE" = "--link" ]; then
@@ -91,8 +116,8 @@ if [ "$MODE" = "--link" ]; then
   URL=$(rclone link --expire "$EXPIRE" "r2:$BUCKET/$KEY")
   # The image's own name, not "latest": this is a specific historical
   # generation, and it must not land on top of the host's current image.
-  IMAGE_FILE=${MATCHES%%-*}
+  IMAGE_FILE=${MATCHES%-*}
   say "done -- on the host, this writes the generation to a name of its own:"
   echo ""
-  echo "curl -fsSL '$URL' | zstd -d -q -o /opt/fc/images/archive-$IMAGE_FILE-${SHA:0:12}"
+  echo "curl -fsSL '$URL' | zstd -d -q -o /opt/fc/images/archive-$IMAGE_FILE-$NEEDLE"
 fi
