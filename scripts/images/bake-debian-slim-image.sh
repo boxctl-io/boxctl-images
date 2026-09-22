@@ -91,6 +91,39 @@ mount --bind /dev "$MOUNT/dev"
 mount -t devpts devpts "$MOUNT/dev/pts"
 trap 'umount "$MOUNT/dev/pts" 2>/dev/null; umount "$MOUNT/dev" 2>/dev/null; umount "$MOUNT/proc" 2>/dev/null; umount "$MOUNT" 2>/dev/null || true' EXIT
 
+say "installing chrony (what puts a resumed box's clock back -- see docs/plans/guest-clock-sync.md)"
+chroot "$MOUNT" apt-get update -qq
+chroot "$MOUNT" apt-get install -y -qq chrony >/dev/null
+mkdir -p "$MOUNT/etc/chrony/conf.d"
+cat <<'EOF' > "$MOUNT/etc/chrony/conf.d/boxctl-resume.conf"
+# Firecracker emulates no RTC: a guest is handed wall-clock time once, at
+# boot, by kvm-clock. `onctl pause` snapshots memory *and* device state,
+# so a resumed box carries on with the clock it had when it was paused --
+# behind by exactly how long it sat paused. With idle auto-pause that's
+# the normal lifecycle of a box, not an edge case.
+
+# /dev/ptp0 is the KVM paravirtual clock (the ptp_kvm driver, "KVM
+# virtual PTP"). Reading it is a hypercall that returns the *host's* real
+# time, so it needs no network, no NTP server and no DNS -- each of which
+# a badly wrong clock can break by itself, which is the whole reason not
+# to depend on them here. poll 0 reads it every second, so a resumed box
+# is right again about a second later.
+refclock PHC /dev/ptp0 poll 0 dpoll -2
+
+# The line this hinges on. chrony's default is to *slew* a large offset
+# (run the clock fast until it catches up) and to step only during its
+# first few updates after startup. A post-resume offset always arrives
+# long after startup, so the default path is slewing -- capped near 8%,
+# which takes about a week to absorb a 12-hour gap. -1 means "step
+# whenever the offset exceeds a second, at any time, however long this
+# daemon has been running".
+makestep 1.0 -1
+EOF
+# Stock chrony.conf on Debian/Ubuntu reads conf.d already; don't assume it.
+grep -q '^confdir /etc/chrony/conf.d' "$MOUNT/etc/chrony/chrony.conf" \
+  || echo 'confdir /etc/chrony/conf.d' >> "$MOUNT/etc/chrony/chrony.conf"
+chroot "$MOUNT" systemctl enable chrony
+
 say "enabling SSH"
 chroot "$MOUNT" systemctl enable ssh
 # Pre-generate host keys so sshd starts immediately at boot instead of
