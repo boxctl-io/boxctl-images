@@ -145,6 +145,22 @@ umount "$MOUNT/dev" 2>/dev/null || true
 umount "$MOUNT/proc" 2>/dev/null || true
 umount "$MOUNT"
 mv "$BUILD_IMAGE" "$IMAGE"
+
+say "recording the identity sidecar ($IMAGE.sha256sum)"
+# "<sha256> <size> <mtime-nanos>", exactly the format
+# internal/rootfsdiff.Identity caches and boxctl-vms-agent.sh's
+# host_images reports from. Written here, at the moment the image lands,
+# because host_images validates a sidecar by *size* alone: this image is
+# always truncated to the same fixed size, so the previous bake's sidecar
+# would otherwise keep being served as the new image's checksum, and the
+# controller would place a cross-host restore on a host whose base image
+# isn't the one the bundle needs. Identity itself re-validates on mtime
+# too, so the restore would then fail rather than patch against the wrong
+# base -- but it would fail after being scheduled, with a confusing
+# reason.
+IMAGE_SHA=$(sha256sum "$IMAGE" | awk '{print $1}')
+printf '%s %s %s\n' "$IMAGE_SHA" "$(stat -c %s "$IMAGE")" "$(date -r "$IMAGE" +%s%N)" > "$IMAGE.sha256sum"
+say "sha256: $IMAGE_SHA (publish-*-image.sh puts this in the R2 object name)"
 # Disarm the EXIT trap now that everything it would try to unmount already
 # is -- see onctl-runners' bake-fc-image.sh for why leaving it armed here
 # makes the whole script exit non-zero even after a fully successful build.

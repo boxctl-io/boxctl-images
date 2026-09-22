@@ -74,8 +74,31 @@ COMPRESSED="$WORKDIR/desktop.ext4.zst"
 zstd -T0 -9 -q "$IMAGE" -o "$COMPRESSED"
 say "compressed size: $(du -h "$COMPRESSED" | cut -f1)"
 
-STAMP=$(date -u +%Y%m%d-%H%M%S)
-DEST_KEY="images/desktop.ext4-$STAMP.zst"
+# The object is named after the image's own sha256 -- the digest of the
+# *uncompressed* ext4, which is exactly what an export bundle's manifest
+# records as baseImageSha256 (see internal/vmbundle's Manifest and
+# rootfsdiff.Identity). A timestamp told you when a generation was
+# published but not which one a given backup needs, so restoring a
+# diff-mode bundle after a re-bake meant downloading and hashing
+# candidates at 4-20 GiB a go. Named this way the lookup is a prefix
+# search (scripts/images/find-image-by-sha.sh), or a direct GET when the
+# caller already knows the image name. R2 keeps the publish time on the
+# object itself, so nothing is lost by dropping it from the key, and
+# re-publishing identical bytes is now idempotent rather than a new
+# object each time.
+IMAGE_SHA=""
+if [ -r "$IMAGE.sha256sum" ]; then
+  read -r sidecar_sha sidecar_size _ <"$IMAGE.sha256sum" || true
+  # Size-checked like boxctl-vms-agent.sh's own host_images does: a
+  # sidecar left over from a previous bake must never name this object.
+  [ "${sidecar_size:-0}" = "$(stat -c %s "$IMAGE")" ] && IMAGE_SHA="$sidecar_sha"
+fi
+if [ -z "$IMAGE_SHA" ]; then
+  say "hashing $IMAGE (no usable sidecar -- baked before bake-*-image.sh wrote one)"
+  IMAGE_SHA=$(sha256sum "$IMAGE" | awk '{print $1}')
+fi
+say "image sha256: $IMAGE_SHA"
+DEST_KEY="images/desktop.ext4-$IMAGE_SHA.zst"
 STABLE_KEY="images/latest/desktop.ext4.zst"
 
 say "uploading to r2:$BUCKET/$DEST_KEY"
