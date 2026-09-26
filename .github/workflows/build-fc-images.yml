@@ -1,7 +1,8 @@
 name: build-fc-images
 
 # Bakes and publishes boxctl-vms's own Firecracker rootfs images (desktop,
-# debian-slim) to Cloudflare R2 on every change to their bake/publish
+# debian-slim, vscode) and the guest kernel every box boots (the `kernel`
+# job) to Cloudflare R2 on every change to their bake/publish
 # scripts -- no more hand-running scripts/images/bake-*.sh and
 # publish-*.sh over SSH on aimax for a routine rebuild.
 #
@@ -37,6 +38,8 @@ on:
       - "scripts/images/publish-desktop-image.sh"
       - "scripts/images/publish-debian-slim-image.sh"
       - "scripts/images/publish-vscode-image.sh"
+      - "scripts/images/bake-kernel-image.sh"
+      - "scripts/images/publish-kernel-image.sh"
       - ".github/workflows/build-fc-images.yml"
   workflow_dispatch: {}
 
@@ -85,3 +88,40 @@ jobs:
           CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
           CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
         run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash "scripts/images/publish-${{ matrix.image }}-image.sh"
+
+  kernel:
+    # The guest kernel every box boots (--kernel-image in internal/vm's
+    # Create) -- see bake-kernel-image.sh's header for why boxctl builds its
+    # own instead of using onctl-runners' CI-runner kernel. Compiling needs
+    # no KVM, so onctl-4 works here too; booting it is still the manual
+    # check on aimax that the rootfs images get.
+    name: Bake + publish (kernel)
+    runs-on: onctl-4
+    timeout-minutes: 60
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: command -v rclone >/dev/null 2>&1 || curl https://rclone.org/install.sh | sudo bash
+
+      - name: Bake kernel
+        run: sudo bash scripts/images/bake-kernel-image.sh
+
+      - name: Static smoke test
+        # An uncompressed x86_64 vmlinux is an ELF executable; anything else
+        # (an HTML error page, a truncated copy) must never be published.
+        run: |
+          set -euo pipefail
+          KERNEL=/opt/fc/images/boxctl-kernel.vmlinux
+          test "$(head -c 4 "$KERNEL" | od -An -tx1 | tr -d ' ')" = 7f454c46 || { echo "FAIL: $KERNEL is not an ELF file" >&2; exit 1; }
+          size=$(stat -c %s "$KERNEL")
+          test "$size" -gt 10000000 || { echo "FAIL: $KERNEL is only $size bytes" >&2; exit 1; }
+          echo "OK: $KERNEL is an ELF vmlinux of $size bytes"
+
+      - name: Publish kernel to R2
+        env:
+          CF_ACCESS_KEY: ${{ secrets.CF_ACCESS_KEY }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+          CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
+        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash scripts/images/publish-kernel-image.sh
