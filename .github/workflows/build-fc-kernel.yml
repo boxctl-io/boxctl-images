@@ -1,0 +1,63 @@
+name: build-fc-kernel
+
+# Bakes and publishes the guest kernel every box boots
+# (/opt/fc/images/boxctl-kernel.vmlinux, `onctl create --kernel-image` in
+# internal/vm's Create) -- see scripts/images/bake-kernel-image.sh's header
+# for why boxctl builds its own instead of using onctl-runners' CI-runner
+# kernel.
+#
+# Separate from build-fc-images.yml on purpose: Firecracker boots the kernel
+# and the rootfs as two independent inputs, so either can change without the
+# other. In one workflow, a workflow-level `paths` filter would re-bake and
+# republish all three rootfs images on a kernel change and rebuild the
+# kernel on a rootfs change.
+#
+# runs-on: onctl-4 like build-fc-images.yml -- compiling needs no KVM.
+# Booting a box on the new kernel is still the manual check on aimax (see the
+# bake script's closing "test directly with" line); after publishing, hosts
+# pick it up through the controller's image sync.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/images/bake-kernel-image.sh"
+      - "scripts/images/publish-kernel-image.sh"
+      - ".github/workflows/build-fc-kernel.yml"
+  workflow_dispatch: {}
+
+jobs:
+  bake-and-publish:
+    name: Bake + publish (kernel)
+    runs-on: onctl-4
+    timeout-minutes: 60
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: command -v rclone >/dev/null 2>&1 || curl https://rclone.org/install.sh | sudo bash
+
+      - name: Bake kernel
+        run: sudo bash scripts/images/bake-kernel-image.sh
+
+      - name: Static smoke test
+        # An uncompressed x86_64 vmlinux is an ELF executable; anything else
+        # (an HTML error page, a truncated copy) must never be published.
+        run: |
+          set -euo pipefail
+          KERNEL=/opt/fc/images/boxctl-kernel.vmlinux
+          test "$(head -c 4 "$KERNEL" | od -An -tx1 | tr -d ' ')" = 7f454c46 || { echo "FAIL: $KERNEL is not an ELF file" >&2; exit 1; }
+          size=$(stat -c %s "$KERNEL")
+          test "$size" -gt 10000000 || { echo "FAIL: $KERNEL is only $size bytes" >&2; exit 1; }
+          echo "OK: $KERNEL is an ELF vmlinux of $size bytes"
+
+      - name: Publish kernel to R2
+        env:
+          CF_ACCESS_KEY: ${{ secrets.CF_ACCESS_KEY }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+          CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
+        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash scripts/images/publish-kernel-image.sh

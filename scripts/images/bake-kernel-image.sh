@@ -35,7 +35,7 @@
 # it to =m (see build-fc-kernel.sh's comments for how that happens).
 #
 # Run on any x86_64 Linux host with root (no KVM needed -- it only
-# compiles), e.g. the build-fc-images workflow's onctl-4 runner, or aimax:
+# compiles), e.g. the build-fc-kernel workflow's onctl-4 runner, or aimax:
 #   sudo bash scripts/images/bake-kernel-image.sh
 # CONFIG_ONLY=1 stops after the config verification (a minute, not 15).
 # Then publish-kernel-image.sh uploads it; hosts pick it up through the

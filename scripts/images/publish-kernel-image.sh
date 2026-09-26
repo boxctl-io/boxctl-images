@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Compresses and uploads the box kernel (bake-kernel-image.sh's output) to the
-# same R2 bucket and layout as the rootfs images -- see
-# publish-debian-slim-image.sh for the bucket, naming and stable-pointer
-# rationale, all reused here unchanged:
-#   images/boxctl-kernel.vmlinux-<sha7>.zst   this build, full sha256 as metadata
-#   images/latest/boxctl-kernel.vmlinux.zst   what hosts fetch (internal/vm
-#                                             ImageObjectKey), via the
+# same R2 bucket as the rootfs images, but under its own kernel/ prefix -- a
+# kernel is a separate artifact from the rootfs images, released on its own
+# (build-fc-kernel.yml). Naming and the stable pointer follow
+# publish-debian-slim-image.sh (see it for the rationale):
+#   kernel/boxctl-kernel.vmlinux-<sha7>.zst   this build, full sha256 as metadata
+#   kernel/latest/boxctl-kernel.vmlinux.zst   what hosts fetch (internal/vm
+#                                             KernelObjectKey), via the
 #                                             controller's image sync and
 #                                             scripts/agent/fetch-image.sh
 #
@@ -66,13 +67,13 @@ COMPRESSED="$WORKDIR/$NAME.zst"
 zstd -T0 -19 -q "$IMAGE" -o "$COMPRESSED"
 say "compressed size: $(du -h "$COMPRESSED" | cut -f1)"
 
-DEST_KEY="images/$NAME-${IMAGE_SHA:0:7}.zst"
-STABLE_KEY="images/latest/$NAME.zst"
+DEST_KEY="kernel/$NAME-${IMAGE_SHA:0:7}.zst"
+STABLE_KEY="kernel/latest/$NAME.zst"
 
 say "uploading to r2:$BUCKET/$DEST_KEY"
 rclone copyto --header-upload "X-Amz-Meta-Sha256: $IMAGE_SHA" "$COMPRESSED" "r2:$BUCKET/$DEST_KEY"
-rclone lsf "r2:$BUCKET/images/" | grep -F "$(basename "$DEST_KEY")" >/dev/null || {
-  echo "FAIL: uploaded file not found when listing r2:$BUCKET/images/" >&2
+rclone lsf "r2:$BUCKET/kernel/" | grep -F "$(basename "$DEST_KEY")" >/dev/null || {
+  echo "FAIL: uploaded file not found when listing r2:$BUCKET/kernel/" >&2
   exit 1
 }
 
