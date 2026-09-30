@@ -1,8 +1,8 @@
 name: build-fc-images
 
 # Bakes and publishes boxctl-vms's own Firecracker rootfs images (desktop,
-# debian-slim, vscode) to Cloudflare R2 on every change to their bake/publish
-# scripts -- no more hand-running scripts/images/bake-*.sh and
+# debian-slim, vscode, ubuntu-26.04) to Cloudflare R2 on every change to
+# their bake/publish scripts -- no more hand-running scripts/images/bake-*.sh and
 # publish-*.sh over SSH on aimax for a routine rebuild.
 #
 # runs-on: onctl-4 (this repo's own onctl-runners pool, already used by
@@ -34,9 +34,11 @@ on:
       - "scripts/images/bake-desktop-image.sh"
       - "scripts/images/bake-debian-slim-image.sh"
       - "scripts/images/bake-vscode-image.sh"
+      - "scripts/images/bake-ubuntu-26.04-image.sh"
       - "scripts/images/publish-desktop-image.sh"
       - "scripts/images/publish-debian-slim-image.sh"
       - "scripts/images/publish-vscode-image.sh"
+      - "scripts/images/publish-ubuntu-26.04-image.sh"
       - ".github/workflows/build-fc-images.yml"
   workflow_dispatch: {}
 
@@ -48,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [desktop, debian-slim, vscode]
+        image: [desktop, debian-slim, vscode, ubuntu-26.04]
     steps:
       - name: Check out code
         uses: actions/checkout@v7
