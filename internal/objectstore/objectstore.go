@@ -247,3 +247,22 @@ func (s *Store) Copy(ctx context.Context, src, dst string, metadata map[string]s
 	}
 	return nil
 }
+
+// List returns every key under prefix, following pagination.
+func (s *Store) List(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+	p := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("objectstore: list %s: %w", prefix, err)
+		}
+		for _, o := range page.Contents {
+			keys = append(keys, aws.ToString(o.Key))
+		}
+	}
+	return keys, nil
+}
