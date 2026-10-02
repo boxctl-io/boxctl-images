@@ -53,7 +53,6 @@ func TestPlanMatrix(t *testing.T) {
 		"one definition":         {[]string{"images/vscode/image.json"}, "vscode:false"},
 		"both":                   {[]string{"images/vscode/image.json", "scripts/images/bake-vscode-image.sh"}, "vscode:true"},
 		"kernel isn't built":     {[]string{"scripts/images/bake-kernel-image.sh", "images/boxctl-kernel/image.json"}, ""},
-		"external isn't built":   {[]string{"images/windows-server-2025/image.json"}, ""},
 		"unrelated":              {[]string{"README.md"}, ""},
 		"nothing changed at all": {[]string{}, ""},
 	}
@@ -91,7 +90,7 @@ func TestMatrixFor(t *testing.T) {
 	if names(got) != "vscode:true,debian-slim:true" {
 		t.Fatalf("got %s", names(got))
 	}
-	for _, bad := range []string{"nope", "boxctl-kernel", "windows-server-2025"} {
+	for _, bad := range []string{"nope", "boxctl-kernel"} {
 		if _, err := matrixFor(d, []string{bad}); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
@@ -284,12 +283,6 @@ func TestPublishRefuses(t *testing.T) {
 	if _, err := p.publish(ctx, publishRequest{def: find(t, "debian-slim"), metadataOnly: true}); err == nil {
 		t.Error("metadata-only publish of a never-published image succeeded")
 	}
-	if _, err := p.publish(ctx, publishRequest{def: find(t, "windows-server-2025"), imagePath: writeImage(t, "x")}); err == nil {
-		t.Error("an external image was uploaded")
-	}
-	if _, err := p.publish(ctx, publishRequest{def: find(t, "debian-slim"), register: true, sha: strings.Repeat("a", 64), size: 1}); err == nil {
-		t.Error("a baked image was registered")
-	}
 	big := writeImage(t, strings.Repeat("x", 2<<20))
 	if _, err := p.publish(ctx, publishRequest{def: find(t, "debian-slim"), imagePath: big}); err == nil {
 		t.Error("an image bigger than the smallest box disk was published")
@@ -299,21 +292,5 @@ func TestPublishRefuses(t *testing.T) {
 	s.objects[imagecatalog.ManifestKey("debian-slim")] = []byte("{not json")
 	if _, err := testPublisher(s).publish(ctx, publishRequest{def: find(t, "debian-slim"), imagePath: writeImage(t, "x")}); err == nil {
 		t.Error("overwrote a manifest that didn't parse")
-	}
-}
-
-func TestRegisterExternal(t *testing.T) {
-	s := newMemStore()
-	m, err := testPublisher(s).publish(context.Background(), publishRequest{
-		def: find(t, "windows-server-2025"), register: true, sha: strings.Repeat("a", 64), size: 42,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m.Current.Key != "" || m.Current.SizeBytes != 42 {
-		t.Fatalf("got %+v", m.Current)
-	}
-	if len(s.puts) != 1 {
-		t.Fatalf("registering uploaded more than the manifest: %v", s.puts)
 	}
 }

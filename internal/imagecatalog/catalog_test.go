@@ -59,11 +59,6 @@ func TestPathsAndKeysMatchWhatHostsAndR2AlreadyHold(t *testing.T) {
 			t.Errorf("LatestKey(%s) = %q, want %q", c.def.Name, got, c.latestK)
 		}
 	}
-	win := rootfs("windows-server-2025")
-	win.Provider = ProviderCH
-	if got := HostPath(win); got != "/opt/win-images/windows-server-2025.raw" {
-		t.Errorf("HostPath(windows) = %q", got)
-	}
 }
 
 func TestValidateSet(t *testing.T) {
@@ -102,8 +97,9 @@ func TestDefinitionValidate(t *testing.T) {
 		"unknown feature":     func(d *Definition) { d.Features = []string{"gpu"} },
 		"missing label":       func(d *Definition) { d.Label = "" },
 		"hidden default":      func(d *Definition) { d.Default, d.Status = true, StatusHidden },
-		"ch kernel":           func(d *Definition) { d.Kind, d.Provider = KindKernel, ProviderCH },
+		"ch provider":         func(d *Definition) { d.Provider = "ch" },
 		"unknown source":      func(d *Definition) { d.Source = "manual" },
+		"external source":     func(d *Definition) { d.Source = "external" },
 		"retired default too": func(d *Definition) { d.Default, d.Status = true, StatusRetired },
 	}
 	for name, mutate := range mutations {
@@ -207,7 +203,7 @@ func TestParseManifestRejects(t *testing.T) {
 		"path-like name":        func(m *Manifest) { m.Name = "../../etc/passwd" },
 		"bad sha":               func(m *Manifest) { m.Current.SHA256 = "nope" },
 		"key not where it goes": func(m *Manifest) { m.Current.Key = "images/other.ext4-aaaaaaa.zst" },
-		"baked without object":  func(m *Manifest) { m.Current.Key = "" },
+		"without object":        func(m *Manifest) { m.Current.Key = "" },
 		"no size":               func(m *Manifest) { m.Current.SizeBytes = 0 },
 	}
 	for name, mutate := range cases {
@@ -218,14 +214,14 @@ func TestParseManifestRejects(t *testing.T) {
 		}
 	}
 
-	ext := rootfs("windows-server-2025")
-	ext.Provider, ext.Source = ProviderCH, SourceExternal
-	reg, err := Advance(nil, ext, &Generation{SHA256: sha('c'), SizeBytes: 1, PublishedAt: time.Now()})
-	if err != nil {
-		t.Fatalf("an external image registered without an object was rejected: %v", err)
-	}
-	if reg.Current.Key != "" {
-		t.Fatal("registered external image has a key")
+	// The Windows image's manifest, as `publish -register` once wrote it:
+	// still in the bucket, but no longer something a reader accepts, so
+	// it's skipped rather than offered.
+	win := `{"schema":1,"name":"windows-server-2025","kind":"rootfs","provider":"ch","source":"external",` +
+		`"label":"W","description":"w","os":"windows","features":[],"status":"available","default":false,` +
+		`"current":{"sha256":"` + sha('c') + `","size_bytes":1,"published_at":"2026-01-01T00:00:00Z"}}`
+	if _, err := ParseManifest([]byte(win)); err == nil {
+		t.Error("a ch/external manifest was accepted")
 	}
 }
 

@@ -7,7 +7,6 @@
 //	boxctl-image validate
 //	boxctl-image matrix [-since <git-ref>] [-images a,b|all]
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
-//	boxctl-image publish <name> -register -sha <sha256> -size <bytes>
 //
 // Building an image is still scripts/images/bake-<name>-image.sh's job;
 // this only needs the result at the image's host path and the
@@ -30,7 +29,6 @@ const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
-  boxctl-image publish <name> -register -sha <sha256> -size <bytes>
 
 publish reads CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
 CF_BUCKET (default boxctl-vms).
@@ -115,9 +113,6 @@ func runPublish(args []string) error {
 	imagePath := fs.String("image", "", "the built image (default: its host path)")
 	metadataOnly := fs.Bool("metadata-only", false, "republish the manifest from image.json without uploading a new generation")
 	gitSHA := fs.String("git-sha", "", "commit the image was built from, recorded in the manifest")
-	register := fs.Bool("register", false, "record an external image's identity without uploading it")
-	sha := fs.String("sha", "", "with -register: the image's sha256")
-	size := fs.Int64("size", 0, "with -register: the image's size in bytes")
 	_ = fs.Parse(args[1:])
 
 	defs, err := imagecatalog.LoadDefinitions(*imagesDir)
@@ -153,9 +148,6 @@ func runPublish(args []string) error {
 		imagePath:    path,
 		gitSHA:       *gitSHA,
 		metadataOnly: *metadataOnly,
-		register:     *register,
-		sha:          *sha,
-		size:         *size,
 	})
 	if err != nil {
 		return err

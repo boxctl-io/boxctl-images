@@ -67,15 +67,11 @@ type publishRequest struct {
 	imagePath    string
 	gitSHA       string
 	metadataOnly bool
-	// register, sha, size: an external image, recorded without upload.
-	register bool
-	sha      string
-	size     int64
 }
 
 // publish makes the bucket hold req's image and a manifest describing it:
 //
-//  1. Unless metadata-only or registering, upload the image to its
+//  1. Unless metadata-only, upload the image to its
 //     sha-named key -- skipped when that key already holds this exact
 //     image, so a re-run is cheap -- and refresh the name-based latest
 //     pointer the server still fetches from.
@@ -92,20 +88,7 @@ func (p *publisher) publish(ctx context.Context, req publishRequest) (imagecatal
 	}
 
 	var gen *imagecatalog.Generation
-	switch {
-	case req.metadataOnly:
-	case req.register:
-		if def.Source != imagecatalog.SourceExternal {
-			return imagecatalog.Manifest{}, fmt.Errorf("%s is baked by CI; -register is only for external images", def.Name)
-		}
-		if !imagecatalog.ValidSHA256(req.sha) || req.size <= 0 {
-			return imagecatalog.Manifest{}, errors.New("-register needs -sha (a lowercase hex sha256) and -size (bytes)")
-		}
-		gen = &imagecatalog.Generation{SHA256: req.sha, SizeBytes: req.size, PublishedAt: p.now().UTC(), GitSHA: req.gitSHA}
-	default:
-		if def.Source != imagecatalog.SourceBaked {
-			return imagecatalog.Manifest{}, fmt.Errorf("%s is external; publish it with -register", def.Name)
-		}
+	if !req.metadataOnly {
 		gen, err = p.upload(ctx, def, req.imagePath, req.gitSHA)
 		if err != nil {
 			return imagecatalog.Manifest{}, err
@@ -152,7 +135,7 @@ func (p *publisher) upload(ctx context.Context, def imagecatalog.Definition, ima
 		return nil, err
 	}
 	log.Printf("%s: sha256 %s, %d bytes", imagePath, sha, size)
-	if def.Kind == imagecatalog.KindRootfs && def.Provider == imagecatalog.ProviderFC && size > p.minDiskBytes {
+	if def.Kind == imagecatalog.KindRootfs && size > p.minDiskBytes {
 		return nil, fmt.Errorf("%s is %d MiB, bigger than the smallest box disk (%d MiB), so no box of that size could boot it",
 			def.Name, size>>20, p.minDiskBytes>>20)
 	}

@@ -38,7 +38,6 @@ const (
 // Providers, matching onctl's -p values and VM.Provider.
 const (
 	ProviderFC = "fc"
-	ProviderCH = "ch"
 )
 
 // Statuses. See image-catalog.md's status table for what each one means
@@ -55,10 +54,6 @@ const (
 	// SourceBaked: built and published by CI (build-fc-images.yml or
 	// build-fc-kernel.yml).
 	SourceBaked = "baked"
-	// SourceExternal: prepared out-of-band (the Windows image). Published
-	// with `boxctl-image publish -register`, which records its identity
-	// but uploads nothing, so hosts that need it are seeded by hand.
-	SourceExternal = "external"
 )
 
 // Features.
@@ -67,12 +62,9 @@ const (
 	FeatureDesktop = "desktop"
 )
 
-// Image directories on a host. Every host keeps its images here, and
-// boxctl-vms-agent.sh's host_images reports them from these directories.
-const (
-	FCImageDir = "/opt/fc/images"
-	CHImageDir = "/opt/win-images"
-)
+// FCImageDir is where every host keeps its images, and where
+// boxctl-vms-agent.sh's host_images reports them from.
+const FCImageDir = "/opt/fc/images"
 
 // ManifestPrefix is where manifests live in the images bucket.
 const ManifestPrefix = "catalog/"
@@ -96,7 +88,7 @@ type Definition struct {
 	// Label and Description are what boxctl-web and the boxctl CLI show.
 	Label       string `json:"label"`
 	Description string `json:"description"`
-	// OS is the guest's distro family ("debian", "ubuntu", "windows"),
+	// OS is the guest's distro family ("debian", "ubuntu"),
 	// for an icon -- not a version.
 	OS       string   `json:"os"`
 	Features []string `json:"features"`
@@ -116,18 +108,11 @@ func (d Definition) Validate() error {
 	default:
 		return fmt.Errorf("%s: kind %q must be %q or %q", d.Name, d.Kind, KindRootfs, KindKernel)
 	}
-	switch d.Provider {
-	case ProviderFC, ProviderCH:
-	default:
-		return fmt.Errorf("%s: provider %q must be %q or %q", d.Name, d.Provider, ProviderFC, ProviderCH)
+	if d.Provider != ProviderFC {
+		return fmt.Errorf("%s: provider %q must be %q", d.Name, d.Provider, ProviderFC)
 	}
-	if d.Kind == KindKernel && d.Provider != ProviderFC {
-		return fmt.Errorf("%s: a kernel is only for provider %q", d.Name, ProviderFC)
-	}
-	switch d.Source {
-	case SourceBaked, SourceExternal:
-	default:
-		return fmt.Errorf("%s: source %q must be %q or %q", d.Name, d.Source, SourceBaked, SourceExternal)
+	if d.Source != SourceBaked {
+		return fmt.Errorf("%s: source %q must be %q", d.Name, d.Source, SourceBaked)
 	}
 	switch d.Status {
 	case StatusAvailable, StatusHidden, StatusDeprecated, StatusRetired:
@@ -179,14 +164,10 @@ func ValidateSet(defs []Definition) error {
 
 // HostPath is where every host keeps d's image.
 func HostPath(d Definition) string {
-	switch {
-	case d.Kind == KindKernel:
+	if d.Kind == KindKernel {
 		return path.Join(FCImageDir, d.Name+".vmlinux")
-	case d.Provider == ProviderCH:
-		return path.Join(CHImageDir, d.Name+".raw")
-	default:
-		return path.Join(FCImageDir, d.Name+".ext4")
 	}
+	return path.Join(FCImageDir, d.Name+".ext4")
 }
 
 // objectPrefix is the R2 prefix d's generations are published under:
@@ -226,9 +207,7 @@ func ManifestKey(name string) string {
 type Generation struct {
 	SHA256    string `json:"sha256"`
 	SizeBytes int64  `json:"size_bytes"`
-	// Key is the zstd-compressed object in the images bucket. Empty for an
-	// external image registered without uploading it: nothing can fetch it,
-	// and hosts that need it are seeded by hand.
+	// Key is the zstd-compressed object in the images bucket.
 	Key         string    `json:"key,omitempty"`
 	PublishedAt time.Time `json:"published_at"`
 	GitSHA      string    `json:"git_sha,omitempty"`
@@ -313,8 +292,8 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("%s: generation key %q isn't where %s publishes it", m.Name, g.Key, g.SHA256[:7])
 		}
 	}
-	if m.Source == SourceBaked && m.Current.Key == "" {
-		return fmt.Errorf("%s: a baked image's current generation must have an object", m.Name)
+	if m.Current.Key == "" {
+		return fmt.Errorf("%s: the current generation must have an object", m.Name)
 	}
 	return nil
 }

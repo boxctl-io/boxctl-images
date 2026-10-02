@@ -23,9 +23,9 @@ type matrixEntry struct {
 const workflowFile = ".github/workflows/build-fc-images.yml"
 
 // built reports whether build-fc-images.yml builds d. The kernel has its
-// own workflow, and external images aren't built at all.
+// own workflow.
 func built(d imagecatalog.Definition) bool {
-	return d.Kind == imagecatalog.KindRootfs && d.Source == imagecatalog.SourceBaked
+	return d.Kind == imagecatalog.KindRootfs
 }
 
 // planMatrix decides what a push builds from the files it changed; nil
