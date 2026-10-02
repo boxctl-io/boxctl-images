@@ -5,7 +5,7 @@
 # has that generation ("no local base image matches sha256 ...", see
 # internal/vmbundle's resolveBaseImage).
 #
-# publish-*-image.sh names every object after the first 7 hex of that
+# boxctl-image publish names every object after the first 7 hex of that
 # digest and attaches the full one as object metadata, so this is a
 # prefix match plus a metadata check -- not a download-and-hash hunt
 # through every generation ever published.
@@ -13,8 +13,8 @@
 #   bash scripts/images/find-image-by-sha.sh <sha256>           # print the key
 #   bash scripts/images/find-image-by-sha.sh <sha256> --link    # + presigned URL
 #
-# With --link it prints the ready-to-run pull command for the host, the
-# same shape mint-*-image-link.sh emits. Objects published before this
+# With --link it prints a ready-to-run download command for the host.
+# Objects published before this
 # naming existed are timestamped instead, so they won't be found here --
 # re-publish that generation from a host that still has the image, or
 # fall back to downloading candidates by hand.
@@ -45,7 +45,7 @@ case "$SHA" in
 esac
 SHA=$(echo "$SHA" | tr '[:upper:]' '[:lower:]')
 EXPIRE="${3:-1h}"
-# Object names carry only the first 7 hex (see publish-*-image.sh), so a
+# Object names carry only the first 7 hex (see imagecatalog.ObjectKey), so a
 # full digest -- which is what a failed restore hands you -- is matched
 # on its first 7 and then confirmed against the object's own metadata
 # below. A shorter argument than that stays a plain prefix match.

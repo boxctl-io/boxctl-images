@@ -6,16 +6,22 @@
 // agent and to end clients, neither of which ever sees the underlying
 // access key, mirroring how internal/auth's terminal tickets hand out a
 // short-lived capability instead of the dashboard's own bearer token.
+//
+// cmd/boxctl-image (the image pipeline, in CI) also uses it directly --
+// Head/Get/Put/Copy -- with its own write key on the images bucket.
 package objectstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // Store presigns PUT/GET URLs for one bucket and can delete objects in
@@ -41,14 +47,30 @@ type Store struct {
 // BOXCTL_DASHBOARD_API_TOKEN), so this package stays testable against a
 // hand-built Store without env mutation.
 func New(accountID, bucket, accessKeyID, secretAccessKey string) (*Store, error) {
-	if accountID == "" || bucket == "" || accessKeyID == "" || secretAccessKey == "" {
+	if accountID == "" {
 		return nil, fmt.Errorf("objectstore: accountID, bucket, accessKeyID, and secretAccessKey are all required")
+	}
+	return NewWithEndpoint(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID), bucket, accessKeyID, secretAccessKey)
+}
+
+// NewWithEndpoint is New for a caller that has the bucket's endpoint URL
+// rather than R2's account ID -- the image pipeline, whose CI secrets
+// (CF_S3_ENDPOINT) have always been the endpoint.
+func NewWithEndpoint(endpoint, bucket, accessKeyID, secretAccessKey string) (*Store, error) {
+	if endpoint == "" || bucket == "" || accessKeyID == "" || secretAccessKey == "" {
+		return nil, fmt.Errorf("objectstore: endpoint, bucket, accessKeyID, and secretAccessKey are all required")
 	}
 
 	client := s3.New(s3.Options{
 		Region:       "auto",
-		BaseEndpoint: aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)),
+		BaseEndpoint: aws.String(endpoint),
 		Credentials:  credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
+		// Only when an operation requires one: the SDK's default adds
+		// CRC checksum headers to every upload, which S3-compatible
+		// stores don't all accept, and Put's body is already covered by
+		// SigV4's payload hash.
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
+		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
 	})
 
 	return &Store{
@@ -137,6 +159,91 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("objectstore: delete %s: %w", key, err)
+	}
+	return nil
+}
+
+// ErrNotFound is returned by Head and Get for an object that doesn't
+// exist.
+var ErrNotFound = errors.New("objectstore: object not found")
+
+// Object is what Head reports about one object.
+type Object struct {
+	Size int64
+	// Metadata is the object's x-amz-meta-* headers, keys lowercased
+	// without the prefix (R2 and S3 both lowercase them).
+	Metadata map[string]string
+}
+
+// Head returns key's size and user metadata, or ErrNotFound.
+func (s *Store) Head(ctx context.Context, key string) (Object, error) {
+	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var nf *types.NotFound
+		var nk *types.NoSuchKey
+		if errors.As(err, &nf) || errors.As(err, &nk) {
+			return Object{}, ErrNotFound
+		}
+		return Object{}, fmt.Errorf("objectstore: head %s: %w", key, err)
+	}
+	return Object{Size: aws.ToInt64(out.ContentLength), Metadata: out.Metadata}, nil
+}
+
+// Get returns key's whole body, or ErrNotFound. For small objects (the
+// image catalog's manifests) -- it reads everything into memory.
+func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var nk *types.NoSuchKey
+		if errors.As(err, &nk) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("objectstore: get %s: %w", key, err)
+	}
+	defer func() { _ = out.Body.Close() }()
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, fmt.Errorf("objectstore: get %s: %w", key, err)
+	}
+	return data, nil
+}
+
+// Put uploads body as key in a single request, with the given content
+// type and user metadata. body must be seekable so SigV4 can hash it
+// before sending; a single PUT tops out at 5 GiB (see PresignPut).
+func (s *Store) Put(ctx context.Context, key string, body io.ReadSeeker, size int64, contentType string, metadata map[string]string) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		Body:          body,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+		Metadata:      metadata,
+	})
+	if err != nil {
+		return fmt.Errorf("objectstore: put %s: %w", key, err)
+	}
+	return nil
+}
+
+// Copy copies src to dst within the bucket, server side -- nothing passes
+// through this process -- replacing dst's user metadata with metadata.
+func (s *Store) Copy(ctx context.Context, src, dst string, metadata map[string]string) error {
+	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:            aws.String(s.bucket),
+		Key:               aws.String(dst),
+		CopySource:        aws.String(s.bucket + "/" + src),
+		Metadata:          metadata,
+		MetadataDirective: types.MetadataDirectiveReplace,
+	})
+	if err != nil {
+		return fmt.Errorf("objectstore: copy %s to %s: %w", src, dst, err)
 	}
 	return nil
 }

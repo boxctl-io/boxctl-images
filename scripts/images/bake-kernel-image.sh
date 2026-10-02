@@ -38,7 +38,7 @@
 # compiles), e.g. the build-fc-kernel workflow's onctl-4 runner, or aimax:
 #   sudo bash scripts/images/bake-kernel-image.sh
 # CONFIG_ONLY=1 stops after the config verification (a minute, not 15).
-# Then publish-kernel-image.sh uploads it; hosts pick it up through the
+# Then `boxctl-image publish boxctl-kernel` uploads it; hosts pick it up through the
 # controller's image sync (it's in MissingImages like the rootfs images).
 # Build time: ~10-15 min on 12 cores.
 set -euo pipefail

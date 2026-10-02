@@ -1,0 +1,12 @@
+{
+  "name": "vscode",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "VS Code Desktop",
+  "description": "XFCE desktop + VNC (as a regular user, not root) with VS Code and Python3/pip already installed.",
+  "os": "ubuntu",
+  "features": ["desktop"],
+  "status": "available",
+  "default": false
+}

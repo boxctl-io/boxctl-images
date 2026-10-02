@@ -1,9 +1,8 @@
 name: build-fc-images
 
-# Bakes and publishes boxctl-vms's own Firecracker rootfs images (desktop,
-# debian-slim, vscode, ubuntu-26.04) to Cloudflare R2 on every change to
-# their bake/publish scripts -- no more hand-running scripts/images/bake-*.sh and
-# publish-*.sh over SSH on aimax for a routine rebuild.
+# Bakes and publishes boxctl-vms's own Firecracker rootfs images to
+# Cloudflare R2 whenever one of them changes -- no more hand-running
+# scripts/images/bake-*.sh over SSH on aimax for a routine rebuild.
 #
 # runs-on: onctl-4 (this repo's own onctl-runners pool, already used by
 # build-image.yml) rather than a new dedicated self-hosted runner like
@@ -20,9 +19,14 @@ name: build-fc-images
 # on aimax bare metal (see scripts/images/bake-*-image.sh's own "Test
 # directly with: onctl create ..." footer).
 #
-# Each image's bake/publish scripts are named bake-<image>-image.sh /
-# publish-<image>-image.sh, so the matrix below drives both without any
-# new per-image script.
+# Which images exist is images/*/image.json (docs/plans/image-catalog.md),
+# not a list here: the plan job asks `boxctl-image matrix` what this push
+# changed. An image whose bake script changed is rebaked; one whose
+# image.json alone changed only has its catalog manifest republished
+# (rebuild: false). Each image is still baked by its own
+# scripts/images/bake-<image>-image.sh; publishing is one generic
+# `boxctl-image publish` that uploads the image by sha and writes its
+# catalog/<image>.json manifest.
 
 permissions:
   contents: read
@@ -31,41 +35,84 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/images/bake-desktop-image.sh"
-      - "scripts/images/bake-debian-slim-image.sh"
-      - "scripts/images/bake-vscode-image.sh"
-      - "scripts/images/bake-ubuntu-26.04-image.sh"
-      - "scripts/images/publish-desktop-image.sh"
-      - "scripts/images/publish-debian-slim-image.sh"
-      - "scripts/images/publish-vscode-image.sh"
-      - "scripts/images/publish-ubuntu-26.04-image.sh"
+      - "images/**"
+      - "scripts/images/bake-*-image.sh"
       - ".github/workflows/build-fc-images.yml"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      images:
+        description: "Images to rebake and publish: comma-separated names, or 'all'"
+        default: all
+
+# One run at a time: two runs publishing the same image would race on its
+# manifest (read, add the new generation, write back).
+concurrency:
+  group: build-fc-images
+  cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: onctl-4
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      count: ${{ steps.matrix.outputs.count }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          # The whole history, so the push's before-sha is there to diff.
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Validate image definitions
+        run: go run ./cmd/boxctl-image validate
+
+      - name: Decide what to build
+        id: matrix
+        env:
+          ONLY: ${{ inputs.images }}
+          SINCE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            go run ./cmd/boxctl-image matrix -only "$ONLY" | tee -a "$GITHUB_OUTPUT"
+          else
+            go run ./cmd/boxctl-image matrix -since "$SINCE" | tee -a "$GITHUB_OUTPUT"
+          fi
+
   bake-and-publish:
-    name: Bake + publish (${{ matrix.image }})
+    name: ${{ matrix.rebuild && 'Bake + publish' || 'Publish manifest' }} (${{ matrix.image }})
+    needs: plan
+    if: needs.plan.outputs.count != '0'
     runs-on: onctl-4
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        image: [desktop, debian-slim, vscode, ubuntu-26.04]
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Check out code
         uses: actions/checkout@v7
 
-      - name: Install rclone
-        # rclone's own install.sh exits 3 (not 0) when already up to date --
-        # harmless here since this is a fresh VM per job, but matches
-        # onctl-runners' build-fc-runner-image.yml's same guard in case a
-        # future onctl-4 image ever ships it preinstalled.
-        run: command -v rclone >/dev/null 2>&1 || curl https://rclone.org/install.sh | sudo bash
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build boxctl-image
+        run: go build -o "$RUNNER_TEMP/boxctl-image" ./cmd/boxctl-image
 
       - name: Bake ${{ matrix.image }} image
+        if: matrix.rebuild
         run: sudo bash "scripts/images/bake-${{ matrix.image }}-image.sh"
 
       - name: Static smoke test
+        if: matrix.rebuild
         # Loop-mounts the freshly baked image read-only and asserts the one
         # thing every bake script writes on success (the /opt/.baked
         # marker) -- catches "the bake silently failed partway through" or
@@ -81,9 +128,14 @@ jobs:
           test -e "$MOUNT/opt/.baked" || { echo "FAIL: /opt/.baked marker missing from $IMAGE" >&2; exit 1; }
           echo "OK: /opt/.baked present in $IMAGE"
 
-      - name: Publish ${{ matrix.image }} image to R2
+      - name: Publish ${{ matrix.image }}
         env:
           CF_ACCESS_KEY: ${{ secrets.CF_ACCESS_KEY }}
           CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
           CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
-        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash "scripts/images/publish-${{ matrix.image }}-image.sh"
+        run: |
+          set -euo pipefail
+          args=(publish "${{ matrix.image }}" -git-sha "$GITHUB_SHA")
+          [ "${{ matrix.rebuild }}" = true ] || args+=(-metadata-only)
+          # sudo: the baked image and its sidecar are root's.
+          sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" "${args[@]}"

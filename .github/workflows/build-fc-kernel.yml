@@ -25,9 +25,15 @@ on:
     branches: [main]
     paths:
       - "scripts/images/bake-kernel-image.sh"
-      - "scripts/images/publish-kernel-image.sh"
+      - "images/boxctl-kernel/**"
       - ".github/workflows/build-fc-kernel.yml"
   workflow_dispatch: {}
+
+# Publishing reads, extends and rewrites catalog/boxctl-kernel.json, so two
+# runs must not overlap.
+concurrency:
+  group: build-fc-kernel
+  cancel-in-progress: false
 
 jobs:
   bake-and-publish:
@@ -38,8 +44,13 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v7
 
-      - name: Install rclone
-        run: command -v rclone >/dev/null 2>&1 || curl https://rclone.org/install.sh | sudo bash
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build boxctl-image
+        run: go build -o "$RUNNER_TEMP/boxctl-image" ./cmd/boxctl-image
 
       - name: Bake kernel
         run: sudo bash scripts/images/bake-kernel-image.sh
@@ -60,4 +71,6 @@ jobs:
           CF_ACCESS_KEY: ${{ secrets.CF_ACCESS_KEY }}
           CF_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
           CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
-        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT bash scripts/images/publish-kernel-image.sh
+        # Uploads it by sha and writes catalog/boxctl-kernel.json -- see
+        # docs/plans/image-catalog.md.
+        run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" publish boxctl-kernel -git-sha "$GITHUB_SHA"

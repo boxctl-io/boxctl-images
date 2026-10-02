@@ -1,0 +1,12 @@
+{
+  "name": "debian-slim",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "Debian Slim",
+  "description": "Minimal Debian 13 base, SSH-only -- the same default AI-agent sandbox providers (E2B, Modal, Daytona) use.",
+  "os": "debian",
+  "features": [],
+  "status": "available",
+  "default": true
+}

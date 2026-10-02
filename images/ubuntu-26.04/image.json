@@ -1,0 +1,12 @@
+{
+  "name": "ubuntu-26.04",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "Ubuntu 26.04 LTS",
+  "description": "Minimal Ubuntu 26.04 LTS base, SSH-only -- Debian Slim's shape with Ubuntu's packages and support window.",
+  "os": "ubuntu",
+  "features": [],
+  "status": "available",
+  "default": false
+}

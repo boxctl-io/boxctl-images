@@ -1,0 +1,12 @@
+{
+  "name": "desktop",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "Desktop (XFCE)",
+  "description": "Boots with a graphical XFCE desktop + VNC server already running -- no post-boot install wait.",
+  "os": "ubuntu",
+  "features": ["desktop"],
+  "status": "available",
+  "default": false
+}

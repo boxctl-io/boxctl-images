@@ -160,7 +160,7 @@ say "recording the identity sidecar ($IMAGE.sha256sum)"
 # reason.
 IMAGE_SHA=$(sha256sum "$IMAGE" | awk '{print $1}')
 printf '%s %s %s\n' "$IMAGE_SHA" "$(stat -c %s "$IMAGE")" "$(date -r "$IMAGE" +%s%N)" > "$IMAGE.sha256sum"
-say "sha256: $IMAGE_SHA (publish-*-image.sh puts this in the R2 object name)"
+say "sha256: $IMAGE_SHA (boxctl-image publish puts this in the R2 object name)"
 # Disarm the EXIT trap now that everything it would try to unmount already
 # is -- see onctl-runners' bake-fc-image.sh for why leaving it armed here
 # makes the whole script exit non-zero even after a fully successful build.

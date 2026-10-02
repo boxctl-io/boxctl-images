@@ -1,0 +1,12 @@
+{
+  "name": "boxctl-kernel",
+  "kind": "kernel",
+  "provider": "fc",
+  "source": "baked",
+  "label": "boxctl guest kernel",
+  "description": "The kernel every Firecracker box boots (scripts/images/bake-kernel-image.sh).",
+  "os": "",
+  "features": [],
+  "status": "available",
+  "default": false
+}
