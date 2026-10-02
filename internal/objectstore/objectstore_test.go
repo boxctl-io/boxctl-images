@@ -125,3 +125,25 @@ func TestPresignPutAndGet_DifferentSignatures(t *testing.T) {
 		t.Error("PUT and GET presigned URLs for the same key should differ (different HTTP method signed)")
 	}
 }
+
+func TestPresignUploadPart(t *testing.T) {
+	s := testStore(t)
+	rawURL, err := s.PresignUploadPart(context.Background(), "backups/vm-1.tar.zst", "upload-abc", 7, time.Hour)
+	if err != nil {
+		t.Fatalf("PresignUploadPart: %v", err)
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("presigned URL %q did not parse: %v", rawURL, err)
+	}
+	q := u.Query()
+	if q.Get("uploadId") != "upload-abc" {
+		t.Errorf("uploadId = %q, want upload-abc", q.Get("uploadId"))
+	}
+	if q.Get("partNumber") != "7" {
+		t.Errorf("partNumber = %q, want 7", q.Get("partNumber"))
+	}
+	if q.Get("X-Amz-Signature") == "" {
+		t.Error("missing X-Amz-Signature -- URL doesn't look presigned")
+	}
+}

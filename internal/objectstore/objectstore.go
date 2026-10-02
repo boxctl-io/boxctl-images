@@ -83,10 +83,10 @@ func NewWithEndpoint(endpoint, bucket, accessKeyID, secretAccessKey string) (*St
 // PresignPut returns a URL an unauthenticated caller (the agent for
 // export, the boxctl/boxctl-web client for import) can PUT the object's
 // raw bytes to directly, valid for expiry. A single presigned PUT tops
-// out at S3's (and R2's) 5GB single-object limit -- comfortably above the
-// bundle sizes docs/plans/vm-snapshot-download.md measured (tens to a
-// few hundred MB); revisit with multipart presigning only if that stops
-// holding.
+// out at S3's (and R2's) 5 GiB single-object limit -- R2 answers a bigger
+// one with EntityTooLarge. Backups past that go up as a multipart upload
+// instead (CreateMultipart/PresignUploadPart; see cmd/server's
+// runBackupJob).
 func (s *Store) PresignPut(ctx context.Context, key string, expiry time.Duration) (string, error) {
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -265,4 +265,79 @@ func (s *Store) List(ctx context.Context, prefix string) ([]string, error) {
 		}
 	}
 	return keys, nil
+}
+
+// MaxParts is S3's (and R2's) cap on parts in one multipart upload.
+const MaxParts = 10000
+
+// Part is one uploaded part of a multipart upload, as CompleteMultipart
+// needs it: its 1-based number and the ETag R2 returned for it.
+type Part struct {
+	Number int32  `json:"number"`
+	ETag   string `json:"etag"`
+}
+
+// CreateMultipart starts a multipart upload for key and returns its
+// upload ID -- the way past a single PUT's 5 GiB cap (see PresignPut).
+// The caller must end it with CompleteMultipart or AbortMultipart: an
+// unfinished upload's parts sit in the bucket, invisible to List, until
+// a lifecycle rule (if any) aborts it.
+func (s *Store) CreateMultipart(ctx context.Context, key string) (string, error) {
+	out, err := s.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return "", fmt.Errorf("objectstore: create multipart %s: %w", key, err)
+	}
+	return aws.ToString(out.UploadId), nil
+}
+
+// PresignUploadPart is PresignPut for one part of a multipart upload:
+// the caller PUTs that part's raw bytes to it and keeps the response's
+// ETag header for CompleteMultipart. R2 requires every part but the last
+// to be the same size, and at least 5 MiB.
+func (s *Store) PresignUploadPart(ctx context.Context, key, uploadID string, partNumber int32, expiry time.Duration) (string, error) {
+	req, err := s.presign.PresignUploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(s.bucket),
+		Key:        aws.String(key),
+		UploadId:   aws.String(uploadID),
+		PartNumber: aws.Int32(partNumber),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("objectstore: presign upload part %d of %s: %w", partNumber, key, err)
+	}
+	return req.URL, nil
+}
+
+// CompleteMultipart assembles parts (in order) into key.
+func (s *Store) CompleteMultipart(ctx context.Context, key, uploadID string, parts []Part) error {
+	completed := make([]types.CompletedPart, len(parts))
+	for i, p := range parts {
+		completed[i] = types.CompletedPart{PartNumber: aws.Int32(p.Number), ETag: aws.String(p.ETag)}
+	}
+	_, err := s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String(s.bucket),
+		Key:             aws.String(key),
+		UploadId:        aws.String(uploadID),
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: completed},
+	})
+	if err != nil {
+		return fmt.Errorf("objectstore: complete multipart %s: %w", key, err)
+	}
+	return nil
+}
+
+// AbortMultipart discards a multipart upload and any parts already
+// uploaded to it.
+func (s *Store) AbortMultipart(ctx context.Context, key, uploadID string) error {
+	_, err := s.client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(s.bucket),
+		Key:      aws.String(key),
+		UploadId: aws.String(uploadID),
+	})
+	if err != nil {
+		return fmt.Errorf("objectstore: abort multipart %s: %w", key, err)
+	}
+	return nil
 }
