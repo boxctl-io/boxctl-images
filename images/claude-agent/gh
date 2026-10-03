@@ -1,0 +1,31 @@
+#!/bin/sh
+# Wraps the real gh (/usr/bin/gh) so it uses the GitHub token forwarded
+# from the machine you're attached from -- see git-credential-boxctl for
+# the socket and its protocol. Earlier in PATH than /usr/bin.
+#
+# GH_TOKEN/GITHUB_TOKEN already set win, as they would for gh itself.
+# Otherwise, with a socket here, the token is fetched for this one call
+# and handed to gh in its environment; without one, gh runs as it is --
+# logged in if `boxctl claude --github store` logged it in, or not.
+#
+# The request says which gh command wants the token (`for=gh-pr-create`),
+# so the attached machine can log it -- only the subcommand words, never
+# the rest of the command line, which can hold secrets (`gh secret set`).
+sock="${BOXCTL_GH_SOCKET:-/root/.boxctl/gh.sock}"
+
+if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] && [ -S "$sock" ]; then
+	what="gh"
+	for word in "${1:-}" "${2:-}"; do
+		case "$word" in
+		"" | -* | *[!a-z-]*) break ;;
+		*) what="$what-$word" ;;
+		esac
+	done
+	if token="$(curl -fsS --max-time 30 --unix-socket "$sock" "http://boxctl/token?host=${GH_HOST:-github.com}&for=$what")"; then
+		GH_TOKEN="$token"
+		export GH_TOKEN
+	else
+		echo "boxctl: the machine this box is attached from didn't hand out a GitHub token; running gh without it" >&2
+	fi
+fi
+exec /usr/bin/gh "$@"
