@@ -159,8 +159,18 @@ cat <<'EOF' > "$MOUNT/etc/chrony/conf.d/boxctl-resume.conf"
 # time, so it needs no network, no NTP server and no DNS -- each of which
 # a badly wrong clock can break by itself, which is the whole reason not
 # to depend on them here. poll 0 reads it every second, so a resumed box
-# is right again about a second later.
-refclock PHC /dev/ptp0 poll 0 dpoll -2
+# is right again a few seconds later.
+#
+# trust and prefer are what make that true -- found live, pausing a box
+# for 90s and resuming it on the host: without them it was still 91s
+# behind half a minute later. After a resume every NTP source is still
+# holding samples from *before* the pause, which agree with the stale
+# clock, so they outvote the one source that knows the real time and
+# chrony rejects PHC0 as a falseticker. trust stops a non-trusted source
+# from outvoting it. prefer makes chrony steer by it at all on Ubuntu,
+# whose own pools (sources.d/ubuntu-ntp-pools.sources) are marked prefer
+# and would otherwise always win selection over it.
+refclock PHC /dev/ptp0 poll 0 dpoll -2 prefer trust
 
 # The line this hinges on. chrony's default is to *slew* a large offset
 # (run the clock fast until it catches up) and to step only during its
