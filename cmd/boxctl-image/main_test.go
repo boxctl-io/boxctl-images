@@ -47,16 +47,17 @@ func TestPlanMatrix(t *testing.T) {
 		changed []string
 		want    string
 	}{
-		"everything":                           {nil, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
-		"workflow":                             {[]string{workflowFile}, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
+		"everything":                           {nil, "claude-agent:true,debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
+		"workflow":                             {[]string{workflowFile}, "claude-agent:true,debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
 		"one bake script":                      {[]string{"scripts/images/bake-desktop-image.sh"}, "desktop:true"},
 		"one definition":                       {[]string{"images/vscode/image.json"}, "vscode:false"},
 		"both":                                 {[]string{"images/vscode/image.json", "scripts/images/bake-vscode-image.sh"}, "vscode:true"},
 		"kernel isn't built":                   {[]string{"scripts/images/bake-kernel-image.sh", "images/boxctl-kernel/image.json"}, ""},
 		"unrelated":                            {[]string{"README.md"}, ""},
-		"a Dockerfile":                         {[]string{"images/debian-slim/Dockerfile"}, "debian-slim:true"},
-		"the builder":                          {[]string{"cmd/boxctl-image/build.go"}, "debian-slim:true,ubuntu-26.04:true"},
-		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "debian-slim:true,ubuntu-26.04:true"},
+		"a Dockerfile, and what is FROM it":    {[]string{"images/debian-slim/Dockerfile"}, "claude-agent:true,debian-slim:true"},
+		"only the image FROM another":          {[]string{"images/claude-agent/Dockerfile"}, "claude-agent:true"},
+		"the builder":                          {[]string{"cmd/boxctl-image/build.go"}, "claude-agent:true,debian-slim:true,ubuntu-26.04:true"},
+		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "claude-agent:true,debian-slim:true,ubuntu-26.04:true"},
 		"a Dockerfile image's definition only": {[]string{"images/ubuntu-26.04/image.json"}, "ubuntu-26.04:false"},
 		"nothing changed at all":               {[]string{}, ""},
 	}

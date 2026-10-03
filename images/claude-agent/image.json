@@ -1,0 +1,13 @@
+{
+  "name": "claude-agent",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "Claude Agent",
+  "description": "Debian Slim plus git, rsync, jq, ripgrep and make -- the tools a coding agent like Claude Code needs on its first command.",
+  "os": "debian",
+  "features": [],
+  "size_mib": 4096,
+  "status": "available",
+  "default": false
+}
