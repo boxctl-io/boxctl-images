@@ -22,6 +22,10 @@ type matrixEntry struct {
 // change to how images are baked may change every image.
 const workflowFile = ".github/workflows/build-fc-images.yml"
 
+// builderFile rebuilds every Dockerfile image when it changes: its fixups
+// are part of each of them.
+const builderFile = "cmd/boxctl-image/build.go"
+
 // built reports whether build-fc-images.yml builds d. The kernel has its
 // own workflow.
 func built(d imagecatalog.Definition) bool {
@@ -32,12 +36,43 @@ func built(d imagecatalog.Definition) bool {
 // changed means everything (a manual run, or a push whose base couldn't
 // be diffed). A retired image is never rebuilt, but a change to its
 // definition is still published -- that's how it gets retired.
-func planMatrix(defs []imagecatalog.Definition, changed []string) []matrixEntry {
+//
+// What rebuilds an image: its bake script, or for a Dockerfile image any
+// file in its directory but image.json, or in any directory it builds
+// from (images/common, an image it's FROM), transitively.
+func planMatrix(imagesDir string, defs []imagecatalog.Definition, changed []string) []matrixEntry {
 	touched := map[string]bool{}
 	for _, f := range changed {
 		touched[f] = true
 	}
 	all := changed == nil || touched[workflowFile]
+	underDir := func(dir string) bool {
+		prefix := "images/" + dir + "/"
+		for f := range touched {
+			if strings.HasPrefix(f, prefix) && f != prefix+imagecatalog.DefinitionFile {
+				return true
+			}
+		}
+		return false
+	}
+	sourcesChanged := func(d imagecatalog.Definition) bool {
+		if !hasDockerfile(imagesDir, d.Name) {
+			return touched["scripts/images/"+bakeScript(d)]
+		}
+		if touched[builderFile] || underDir(d.Name) {
+			return true
+		}
+		deps, err := imageDeps(imagesDir, d.Name)
+		if err != nil {
+			return true // validate reports it; rebuilding is the safe side
+		}
+		for dep := range deps {
+			if underDir(dep) {
+				return true
+			}
+		}
+		return false
+	}
 
 	entries := []matrixEntry{}
 	for _, d := range defs {
@@ -45,7 +80,7 @@ func planMatrix(defs []imagecatalog.Definition, changed []string) []matrixEntry 
 			continue
 		}
 		retired := d.Status == imagecatalog.StatusRetired
-		rebuild := !retired && (all || touched["scripts/images/"+bakeScript(d)])
+		rebuild := !retired && (all || sourcesChanged(d))
 		metadata := touched["images/"+d.Name+"/"+imagecatalog.DefinitionFile]
 		if rebuild || metadata {
 			entries = append(entries, matrixEntry{Image: d.Name, Rebuild: rebuild})

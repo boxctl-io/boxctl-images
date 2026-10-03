@@ -7,6 +7,7 @@
   "description": "Minimal Debian 13 base, SSH-only -- the same default AI-agent sandbox providers (E2B, Modal, Daytona) use.",
   "os": "debian",
   "features": [],
+  "size_mib": 4096,
   "status": "available",
   "default": true
 }

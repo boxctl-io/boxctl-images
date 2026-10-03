@@ -21,10 +21,13 @@ name: build-fc-images
 #
 # Which images exist is images/*/image.json (docs/plans/image-catalog.md),
 # not a list here: the plan job asks `boxctl-image matrix` what this push
-# changed. An image whose bake script changed is rebaked; one whose
+# changed. An image whose sources changed is rebuilt; one whose
 # image.json alone changed only has its catalog manifest republished
-# (rebuild: false). Each image is still baked by its own
-# scripts/images/bake-<image>-image.sh; publishing is one generic
+# (rebuild: false). An image is built from images/<image>/Dockerfile
+# (docs/plans/dockerfile-rootfs.md) -- its sources being that directory,
+# whatever it builds from (images/common, an image it's FROM), and
+# cmd/boxctl-image/build.go -- or, until it moves over, by its
+# scripts/images/bake-<image>-image.sh. Publishing is one generic
 # `boxctl-image publish` that uploads the image by sha and writes its
 # catalog/<image>.json manifest.
 
@@ -37,6 +40,7 @@ on:
     paths:
       - "images/**"
       - "scripts/images/bake-*-image.sh"
+      - "cmd/boxctl-image/build.go"
       - ".github/workflows/build-fc-images.yml"
   workflow_dispatch:
     inputs:
@@ -107,14 +111,31 @@ jobs:
       - name: Build boxctl-image
         run: go build -o "$RUNNER_TEMP/boxctl-image" ./cmd/boxctl-image
 
-      - name: Bake ${{ matrix.image }} image
+      - name: Build ${{ matrix.image }} image
         if: matrix.rebuild
-        run: sudo bash "scripts/images/bake-${{ matrix.image }}-image.sh"
+        # From images/<image>/Dockerfile when it has one -- the Docker
+        # build unprivileged (the runner user is in the docker group, and
+        # buildx may be a per-user plugin root doesn't have), then
+        # unpacking it and making the ext4 as root, since the tree is
+        # root-owned. Otherwise its bake script, as before. See
+        # docs/plans/dockerfile-rootfs.md.
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          if [ -f "images/$IMAGE/Dockerfile" ]; then
+            command -v mkfs.ext4 >/dev/null || sudo apt-get install -y -qq e2fsprogs
+            "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -tar-only "$RUNNER_TEMP/rootfs.tar"
+            sudo "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -from-tar "$RUNNER_TEMP/rootfs.tar"
+            rm -f "$RUNNER_TEMP/rootfs.tar"
+          else
+            sudo "$RUNNER_TEMP/boxctl-image" build "$IMAGE"
+          fi
 
       - name: Static smoke test
         if: matrix.rebuild
-        # Loop-mounts the freshly baked image read-only and asserts the one
-        # thing every bake script writes on success (the /opt/.baked
+        # Loop-mounts the freshly built image read-only and asserts the one
+        # thing every build writes on success (the /opt/.baked
         # marker) -- catches "the bake silently failed partway through" or
         # "wrote to the wrong path" before it's ever published. Not a real
         # boot test (see this workflow's header comment for why that can't

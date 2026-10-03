@@ -1,0 +1,15 @@
+# Generates this box's own SSH host keys on its first boot. Images ship
+# none (images/common/install.sh removes them), so every box gets keys of
+# its own instead of sharing the image's.
+[Unit]
+Description=Generate SSH host keys on first boot
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+Before=ssh.service ssh.socket
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

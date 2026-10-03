@@ -7,6 +7,7 @@
   "description": "Minimal Ubuntu 26.04 LTS base, SSH-only -- Debian Slim's shape with Ubuntu's packages and support window.",
   "os": "ubuntu",
   "features": [],
+  "size_mib": 4096,
   "status": "available",
   "default": false
 }

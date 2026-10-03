@@ -47,17 +47,21 @@ func TestPlanMatrix(t *testing.T) {
 		changed []string
 		want    string
 	}{
-		"everything":             {nil, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
-		"workflow":               {[]string{workflowFile}, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
-		"one bake script":        {[]string{"scripts/images/bake-desktop-image.sh"}, "desktop:true"},
-		"one definition":         {[]string{"images/vscode/image.json"}, "vscode:false"},
-		"both":                   {[]string{"images/vscode/image.json", "scripts/images/bake-vscode-image.sh"}, "vscode:true"},
-		"kernel isn't built":     {[]string{"scripts/images/bake-kernel-image.sh", "images/boxctl-kernel/image.json"}, ""},
-		"unrelated":              {[]string{"README.md"}, ""},
-		"nothing changed at all": {[]string{}, ""},
+		"everything":                           {nil, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
+		"workflow":                             {[]string{workflowFile}, "debian-slim:true,desktop:true,ubuntu-26.04:true,vscode:true"},
+		"one bake script":                      {[]string{"scripts/images/bake-desktop-image.sh"}, "desktop:true"},
+		"one definition":                       {[]string{"images/vscode/image.json"}, "vscode:false"},
+		"both":                                 {[]string{"images/vscode/image.json", "scripts/images/bake-vscode-image.sh"}, "vscode:true"},
+		"kernel isn't built":                   {[]string{"scripts/images/bake-kernel-image.sh", "images/boxctl-kernel/image.json"}, ""},
+		"unrelated":                            {[]string{"README.md"}, ""},
+		"a Dockerfile":                         {[]string{"images/debian-slim/Dockerfile"}, "debian-slim:true"},
+		"the builder":                          {[]string{"cmd/boxctl-image/build.go"}, "debian-slim:true,ubuntu-26.04:true"},
+		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "debian-slim:true,ubuntu-26.04:true"},
+		"a Dockerfile image's definition only": {[]string{"images/ubuntu-26.04/image.json"}, "ubuntu-26.04:false"},
+		"nothing changed at all":               {[]string{}, ""},
 	}
 	for name, c := range cases {
-		if got := names(planMatrix(d, c.changed)); got != c.want {
+		if got := names(planMatrix("../../images", d, c.changed)); got != c.want {
 			t.Errorf("%s: got %q, want %q", name, got, c.want)
 		}
 	}
@@ -70,10 +74,10 @@ func TestPlanMatrixRetired(t *testing.T) {
 			d[i].Status = imagecatalog.StatusRetired
 		}
 	}
-	if got := names(planMatrix(d, nil)); strings.Contains(got, "desktop") {
+	if got := names(planMatrix("../../images", d, nil)); strings.Contains(got, "desktop") {
 		t.Errorf("a retired image was rebuilt: %s", got)
 	}
-	if got := names(planMatrix(d, []string{"images/desktop/image.json"})); got != "desktop:false" {
+	if got := names(planMatrix("../../images", d, []string{"images/desktop/image.json"})); got != "desktop:false" {
 		t.Errorf("retiring an image didn't republish its manifest: %s", got)
 	}
 	if _, err := matrixFor(d, []string{"desktop"}); err == nil {

@@ -6,12 +6,13 @@
 //
 //	boxctl-image validate
 //	boxctl-image matrix [-since <git-ref>] [-images a,b|all]
+//	boxctl-image build <name> [-out <path>] [-from-tar <tar> | -tar-only <tar>]
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
 //	boxctl-image publish-agent [-dir scripts/agent] [-git-sha <sha>]
 //
-// Building an image is still scripts/images/bake-<name>-image.sh's job;
-// this only needs the result at the image's host path and the
-// <path>.sha256sum sidecar bake leaves beside it.
+// build makes the image at its host path with a <path>.sha256sum sidecar
+// beside it: from images/<name>/Dockerfile (build.go), or by running its
+// scripts/images/bake-<name>-image.sh for an image not moved over yet.
 package main
 
 import (
@@ -29,6 +30,7 @@ import (
 const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
+  boxctl-image build <name> [-images dir] [-scripts dir] [-out path] [-from-tar tar | -tar-only tar]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
   boxctl-image publish-agent [-dir scripts/agent] [-git-sha sha]
 
@@ -47,6 +49,8 @@ func main() {
 		err = runValidate(os.Args[2:])
 	case "matrix":
 		err = runMatrix(os.Args[2:])
+	case "build":
+		err = runBuild(os.Args[2:])
 	case "publish":
 		err = runPublish(os.Args[2:])
 	case "publish-agent":
@@ -97,7 +101,7 @@ func runMatrix(args []string) error {
 		if *only == "" {
 			changed = changedFiles(*since)
 		}
-		entries = planMatrix(defs, changed)
+		entries = planMatrix(*imagesDir, defs, changed)
 	}
 	out, err := githubOutput(entries)
 	if err != nil {
@@ -105,6 +109,36 @@ func runMatrix(args []string) error {
 	}
 	fmt.Print(out)
 	return nil
+}
+
+func runBuild(args []string) error {
+	if len(args) < 1 || strings.HasPrefix(args[0], "-") {
+		return fmt.Errorf("an image name is required\n%s", usage)
+	}
+	name := args[0]
+	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	imagesDir := fs.String("images", "images", "directory of image definitions")
+	scriptsDir := fs.String("scripts", "scripts/images", "directory of bake scripts")
+	out := fs.String("out", "", "where the image lands (default: its host path)")
+	fromTar := fs.String("from-tar", "", "skip the Docker build: make the image from this filesystem tar")
+	tarOnly := fs.String("tar-only", "", "stop after the Docker build, leaving the filesystem tar here")
+	_ = fs.Parse(args[1:])
+
+	defs, err := imagecatalog.LoadDefinitions(*imagesDir)
+	if err != nil {
+		return err
+	}
+	def, ok := imagecatalog.Find(defs, name)
+	if !ok {
+		return fmt.Errorf("no image %q in %s", name, *imagesDir)
+	}
+	if *out == "" {
+		*out = imagecatalog.HostPath(def)
+	}
+	return newBuilder().build(buildRequest{
+		def: def, imagesDir: *imagesDir, scriptsDir: *scriptsDir,
+		out: *out, fromTar: *fromTar, tarOnly: *tarOnly,
+	})
 }
 
 func runPublish(args []string) error {

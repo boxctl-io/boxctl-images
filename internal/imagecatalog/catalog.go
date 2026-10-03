@@ -92,7 +92,11 @@ type Definition struct {
 	// for an icon -- not a version.
 	OS       string   `json:"os"`
 	Features []string `json:"features"`
-	Status   string   `json:"status"`
+	// SizeMiB is the size of the ext4 a Dockerfile-built rootfs is made
+	// into (`boxctl-image build`); a box's own disk is grown from it at
+	// create time. Unset for an image whose bake script picks its own.
+	SizeMiB int    `json:"size_mib,omitempty"`
+	Status  string `json:"status"`
 	// Default marks the image a client preselects. Exactly one image has it.
 	Default bool `json:"default"`
 }
@@ -121,6 +125,9 @@ func (d Definition) Validate() error {
 	}
 	if d.Kind == KindRootfs && (d.Label == "" || d.Description == "" || d.OS == "") {
 		return fmt.Errorf("%s: label, description and os are required", d.Name)
+	}
+	if d.SizeMiB < 0 || (d.SizeMiB > 0 && d.Kind != KindRootfs) {
+		return fmt.Errorf("%s: size_mib is only for a rootfs, and must be positive", d.Name)
 	}
 	for _, f := range d.Features {
 		if f != FeatureDesktop {
