@@ -7,6 +7,7 @@
 //	boxctl-image validate
 //	boxctl-image matrix [-since <git-ref>] [-images a,b|all]
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
+//	boxctl-image publish-agent [-dir scripts/agent] [-git-sha <sha>]
 //
 // Building an image is still scripts/images/bake-<name>-image.sh's job;
 // this only needs the result at the image's host path and the
@@ -29,8 +30,9 @@ const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
+  boxctl-image publish-agent [-dir scripts/agent] [-git-sha sha]
 
-publish reads CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
+publish and publish-agent read CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
 CF_BUCKET (default boxctl-vms).
 `
 
@@ -47,6 +49,8 @@ func main() {
 		err = runMatrix(os.Args[2:])
 	case "publish":
 		err = runPublish(os.Args[2:])
+	case "publish-agent":
+		err = runPublishAgent(os.Args[2:])
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
@@ -124,14 +128,7 @@ func runPublish(args []string) error {
 		return fmt.Errorf("no image %q in %s", name, *imagesDir)
 	}
 
-	bucket := os.Getenv("CF_BUCKET")
-	if bucket == "" {
-		bucket = "boxctl-vms"
-	}
-	store, err := objectstore.NewWithEndpoint(
-		os.Getenv("CF_S3_ENDPOINT"), bucket,
-		os.Getenv("CF_ACCESS_KEY"), os.Getenv("CF_SECRET_ACCESS_KEY"),
-	)
+	store, err := storeFromEnv()
 	if err != nil {
 		return err
 	}
@@ -154,4 +151,16 @@ func runPublish(args []string) error {
 	}
 	fmt.Printf("published %s: %s (%s)\n", imagecatalog.ManifestKey(m.Name), m.Current.SHA256, m.Status)
 	return nil
+}
+
+// storeFromEnv is the images bucket, from publish's CF_* environment.
+func storeFromEnv() (*objectstore.Store, error) {
+	bucket := os.Getenv("CF_BUCKET")
+	if bucket == "" {
+		bucket = "boxctl-vms"
+	}
+	return objectstore.NewWithEndpoint(
+		os.Getenv("CF_S3_ENDPOINT"), bucket,
+		os.Getenv("CF_ACCESS_KEY"), os.Getenv("CF_SECRET_ACCESS_KEY"),
+	)
 }
