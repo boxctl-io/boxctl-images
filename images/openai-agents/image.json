@@ -1,0 +1,13 @@
+{
+  "name": "openai-agents",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "OpenAI Agents",
+  "description": "Debian Slim plus Node.js and the Codex CLI -- ready to be the self-hosted environment of an OpenAI Agents API session.",
+  "os": "debian",
+  "features": [],
+  "size_mib": 4096,
+  "status": "available",
+  "default": false
+}
