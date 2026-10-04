@@ -4,13 +4,13 @@ name: build-fc-images
 # Cloudflare R2 whenever one of them changes -- no more hand-running
 # scripts/images/bake-*.sh over SSH on aimax for a routine rebuild.
 #
-# runs-on: onctl-4 (this repo's own onctl-runners pool, already used by
+# runs-on: onctl-2 (this repo's own onctl-runners pool, already used by
 # build-image.yml) rather than a new dedicated self-hosted runner like
 # onctl-runners' own build-fc-runner-image.yml uses. Verified live before
 # writing this: debootstrap + loop-mount + chroot all work fine inside an
-# onctl-4 job (it's a real VM with root + loop devices, confirmed via a
+# onctl-2 job (it's a real VM with root + loop devices, confirmed via a
 # throwaway `onctl create -p fc` + `mkfs.ext4`/`mount -o loop` round-trip)
-# -- no KVM needed for baking. What onctl-4 can NOT do is a real
+# -- no KVM needed for baking. What onctl-2 can NOT do is a real
 # boot-smoke-test: `/dev/kvm` doesn't exist inside it (confirmed the same
 # way), since it's itself a Firecracker guest with no nested
 # virtualization configured. So this workflow deliberately stops at
@@ -57,7 +57,7 @@ concurrency:
 jobs:
   plan:
     name: Plan
-    runs-on: onctl-4
+    runs-on: onctl-2
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -94,7 +94,7 @@ jobs:
     name: ${{ matrix.rebuild && 'Bake + publish' || 'Publish manifest' }} (${{ matrix.image }})
     needs: plan
     if: needs.plan.outputs.count != '0'
-    runs-on: onctl-4
+    runs-on: onctl-2
     timeout-minutes: 30
     strategy:
       fail-fast: false

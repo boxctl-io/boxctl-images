@@ -12,7 +12,7 @@ name: build-fc-kernel
 # republish all three rootfs images on a kernel change and rebuild the
 # kernel on a rootfs change.
 #
-# runs-on: onctl-4 like build-fc-images.yml -- compiling needs no KVM.
+# runs-on: onctl-2 like build-fc-images.yml -- compiling needs no KVM.
 # Booting a box on the new kernel is still the manual check on aimax (see the
 # bake script's closing "test directly with" line); after publishing, hosts
 # pick it up through the controller's image sync.
@@ -38,7 +38,7 @@ concurrency:
 jobs:
   bake-and-publish:
     name: Bake + publish (kernel)
-    runs-on: onctl-4
+    runs-on: onctl-2
     timeout-minutes: 60
     steps:
       - name: Check out code
