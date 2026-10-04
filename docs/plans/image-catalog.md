@@ -6,7 +6,9 @@
 > dropped afterwards (#121), so everything below about `ch`,
 > `windows-server-2025` and external images is history. Still open:
 > step 4 (the tunnel agent's own image list), step 5 (boxctl-web and the
-> CLI reading `/api/images`) and step 6 (older generations on hosts).
+> CLI reading `/api/images`). Step 6 is done differently than planned:
+> hosts keep the version they replace rather than fetching old ones back
+> (see step 6).
 
 ## The problem
 
@@ -397,8 +399,15 @@ to move at the same time.
 4. **Tunnel agent** stops carrying its own list (server sends
    `BaseImagePath`). Server first, then agents.
 5. **Clients** read `/api/images` (boxctl-web, then the CLI).
-6. **Generations on hosts** for restoring against `previous` -- only if
-   restores of re-baked bases are actually being hit.
+6. **Generations on hosts** -- done, by keeping rather than fetching
+   back: `fetch-image.sh` moves the version it replaces into the image
+   directory's `.generations/` (the newest two per image), the agent
+   reports them (`image_generations`) along with the
+   `image-generations` capability, and only then does the controller
+   replace a host's out-of-date image. Restores find their base there
+   (`rootfsdiff.FindKeptGeneration`), and the scheduler counts a kept
+   version as a match. Hosts whose agent predates this keep what they
+   have, as before.
 
 ## Open questions
 
