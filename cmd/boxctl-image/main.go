@@ -7,12 +7,15 @@
 //	boxctl-image validate
 //	boxctl-image matrix [-since <git-ref>] [-images a,b|all]
 //	boxctl-image build <name> [-out <path>] [-from-tar <tar> | -tar-only <tar>]
+//	boxctl-image convert <ref> [-name <name>] [-out <path>] [-size-mib <n>]
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
 //	boxctl-image publish-agent [-dir scripts/agent] [-git-sha <sha>]
 //
 // build makes the image at its host path with a <path>.sha256sum sidecar
 // beside it: from images/<name>/Dockerfile (build.go), or by running its
 // scripts/images/bake-<name>-image.sh for an image not moved over yet.
+// convert makes one from a container image in a registry instead
+// (convert.go); it isn't a catalog image, so nothing publishes it.
 package main
 
 import (
@@ -31,6 +34,7 @@ const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
   boxctl-image build <name> [-images dir] [-scripts dir] [-out path] [-from-tar tar | -tar-only tar]
+  boxctl-image convert <ref> [-images dir] [-name name] [-out path] [-size-mib n] [-no-service] [-from-tar tar | -tar-only tar]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
   boxctl-image publish-agent [-dir scripts/agent] [-git-sha sha]
 
@@ -51,6 +55,8 @@ func main() {
 		err = runMatrix(os.Args[2:])
 	case "build":
 		err = runBuild(os.Args[2:])
+	case "convert":
+		err = runConvert(os.Args[2:])
 	case "publish":
 		err = runPublish(os.Args[2:])
 	case "publish-agent":
