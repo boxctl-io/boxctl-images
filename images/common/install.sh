@@ -10,6 +10,8 @@
 # root key logins (onctl writes /root/.ssh/authorized_keys into each box's
 # copy), chrony against /dev/ptp0 so a resumed box's clock catches up, and
 # no network config of its own -- the kernel command line brings up eth0.
+# e2fsprogs is for resize2fs, which growing a box's disk uses to grow the
+# filesystem on it (scripts/agent/grow-disk.sh).
 # The files Docker manages during a build (/etc/hostname, /etc/hosts,
 # /etc/resolv.conf) are written after export by `boxctl-image build`,
 # since anything written to them here wouldn't survive.
@@ -22,7 +24,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
   systemd systemd-sysv udev openssh-server chrony sudo \
-  curl ca-certificates iproute2 iputils-ping netbase
+  curl ca-certificates iproute2 iputils-ping netbase \
+  e2fsprogs
 
 # docs/plans/guest-clock-sync.md
 install -D -m 0644 /boxctl/boxctl-resume.conf /etc/chrony/conf.d/boxctl-resume.conf
