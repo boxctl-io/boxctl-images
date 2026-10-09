@@ -1,10 +1,18 @@
 # Generates this box's own SSH host keys on its first boot. Images ship
 # none (images/common/install.sh removes them), so every box gets keys of
 # its own instead of sharing the image's.
+#
+# Ordered before ssh.service only, never ssh.socket: this unit starts
+# after basic.target, which is after sockets.target, which is after
+# ssh.socket, so Before=ssh.socket is a cycle. systemd breaks it by
+# dropping ssh.socket, and on Ubuntu, where ssh.service requires
+# ssh.socket, that leaves nothing listening on port 22. sshd itself is
+# what needs the keys, and it still waits for them when the socket starts
+# it.
 [Unit]
 Description=Generate SSH host keys on first boot
 ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
-Before=ssh.service ssh.socket
+Before=ssh.service
 
 [Service]
 Type=oneshot

@@ -102,7 +102,8 @@ have a Dockerfile or a bake script, never both, and a Dockerfile image a
 scripts ran `ssh-keygen -A` at bake time, so every box from an image
 shared one set of host keys -- any box could impersonate any other to a
 client that had seen one. `boxctl-ssh-host-keys.service` is a oneshot
-ordered before `ssh.service`/`ssh.socket` with
+ordered before `ssh.service` (not `ssh.socket`: that is an ordering
+cycle, which on Ubuntu costs the box its SSH listener) with
 `ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key`, running
 `ssh-keygen -A`; `install.sh` deletes any keys the package made. Same for
 `/etc/machine-id`: left empty, so systemd generates a unique one per
