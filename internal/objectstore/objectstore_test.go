@@ -147,3 +147,53 @@ func TestPresignUploadPart(t *testing.T) {
 		t.Error("missing X-Amz-Signature -- URL doesn't look presigned")
 	}
 }
+
+func TestOpen_RejectsABadEndpoint(t *testing.T) {
+	for _, endpoint := range []string{"", "minio:9000", "ftp://minio", "https://"} {
+		if _, err := Open(Config{Endpoint: endpoint, Bucket: "b", AccessKeyID: "k", SecretAccessKey: "s"}); err == nil {
+			t.Errorf("Open(endpoint %q): expected an error, got nil", endpoint)
+		}
+	}
+}
+
+// A self-hosted store has no wildcard DNS name for its buckets, so the
+// bucket has to travel in the path, on the endpoint's own host and port.
+func TestOpen_PathStyleKeepsTheEndpointHost(t *testing.T) {
+	s, err := Open(Config{Endpoint: "http://minio.corp.example:9000", Bucket: "transfers", PathStyle: true, AccessKeyID: "k", SecretAccessKey: "s"})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	rawURL, err := s.PresignGet(context.Background(), "exports/a.tar.zst", time.Minute, "")
+	if err != nil {
+		t.Fatalf("PresignGet: %v", err)
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("presigned URL %q did not parse: %v", rawURL, err)
+	}
+	if u.Scheme != "http" || u.Host != "minio.corp.example:9000" {
+		t.Errorf("scheme://host = %s://%s, want http://minio.corp.example:9000", u.Scheme, u.Host)
+	}
+	if u.Path != "/transfers/exports/a.tar.zst" {
+		t.Errorf("path = %q, want /transfers/exports/a.tar.zst", u.Path)
+	}
+}
+
+// The region is part of what gets signed: a store that checks it rejects
+// a link signed for any other. Empty keeps R2's "auto".
+func TestOpen_RegionGoesIntoTheSignature(t *testing.T) {
+	for region, want := range map[string]string{"": "auto", "us-east-1": "us-east-1"} {
+		s, err := Open(Config{Endpoint: "https://s3.corp.example", Region: region, Bucket: "b", AccessKeyID: "k", SecretAccessKey: "s"})
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		rawURL, err := s.PresignGet(context.Background(), "k", time.Minute, "")
+		if err != nil {
+			t.Fatalf("PresignGet: %v", err)
+		}
+		u, _ := url.Parse(rawURL)
+		if cred := u.Query().Get("X-Amz-Credential"); !strings.Contains(cred, "/"+want+"/s3/") {
+			t.Errorf("region %q: credential scope = %q, want region %q in it", region, cred, want)
+		}
+	}
+}

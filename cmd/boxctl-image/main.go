@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +40,8 @@ const usage = `usage:
   boxctl-image publish-agent [-dir scripts/agent] [-git-sha sha]
 
 publish and publish-agent read CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
-CF_BUCKET (default boxctl-vms).
+CF_BUCKET (default boxctl-vms). For a store other than R2, CF_S3_REGION sets the signing
+region (default auto) and CF_S3_PATH_STYLE=true addresses the bucket by path.
 `
 
 func main() {
@@ -199,8 +201,19 @@ func storeFromEnv() (*objectstore.Store, error) {
 	if bucket == "" {
 		bucket = "boxctl-vms"
 	}
-	return objectstore.NewWithEndpoint(
-		os.Getenv("CF_S3_ENDPOINT"), bucket,
-		os.Getenv("CF_ACCESS_KEY"), os.Getenv("CF_SECRET_ACCESS_KEY"),
-	)
+	pathStyle := false
+	if v := os.Getenv("CF_S3_PATH_STYLE"); v != "" {
+		var err error
+		if pathStyle, err = strconv.ParseBool(v); err != nil {
+			return nil, fmt.Errorf("invalid CF_S3_PATH_STYLE %q: want true or false", v)
+		}
+	}
+	return objectstore.Open(objectstore.Config{
+		Endpoint:        os.Getenv("CF_S3_ENDPOINT"),
+		Region:          os.Getenv("CF_S3_REGION"),
+		Bucket:          bucket,
+		PathStyle:       pathStyle,
+		AccessKeyID:     os.Getenv("CF_ACCESS_KEY"),
+		SecretAccessKey: os.Getenv("CF_SECRET_ACCESS_KEY"),
+	})
 }

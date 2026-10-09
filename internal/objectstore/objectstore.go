@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -35,11 +36,32 @@ type Store struct {
 	presign *s3.PresignClient
 }
 
-// New builds a Store against an R2 bucket. accountID is R2's
-// account-specific subdomain (the bucket's endpoint is
-// https://{accountID}.r2.cloudflarestorage.com); region is fixed to
-// "auto" per Cloudflare's S3-compatibility docs -- R2 has no concept of
-// AWS regions, "auto" is the literal value R2's API expects there.
+// Config is one bucket on an S3-compatible store.
+type Config struct {
+	// Endpoint is the store's base URL, e.g.
+	// https://{accountID}.r2.cloudflarestorage.com or http://minio:9000.
+	Endpoint string
+	// Region goes into every request's signature. Empty means "auto",
+	// the literal value R2 expects -- it has no concept of AWS regions.
+	// A store that checks it (MinIO with a region configured, Ceph, AWS)
+	// needs its own.
+	Region string
+	Bucket string
+	// PathStyle addresses the bucket as {endpoint}/{bucket}/{key} instead
+	// of the default {bucket}.{endpoint}/{key}. R2 and AWS answer the
+	// default; a self-hosted store usually has no wildcard DNS name for
+	// its buckets, so it needs this.
+	PathStyle       bool
+	AccessKeyID     string
+	SecretAccessKey string
+}
+
+// R2Endpoint is the endpoint of an R2 account's buckets.
+func R2Endpoint(accountID string) string {
+	return fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+}
+
+// New builds a Store against an R2 bucket, named by its account ID.
 //
 // Deliberately takes bucket/accountID/keys as plain strings rather than
 // reading the environment itself -- cmd/server's caller does that (same
@@ -50,21 +72,27 @@ func New(accountID, bucket, accessKeyID, secretAccessKey string) (*Store, error)
 	if accountID == "" {
 		return nil, fmt.Errorf("objectstore: accountID, bucket, accessKeyID, and secretAccessKey are all required")
 	}
-	return NewWithEndpoint(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID), bucket, accessKeyID, secretAccessKey)
+	return Open(Config{Endpoint: R2Endpoint(accountID), Bucket: bucket, AccessKeyID: accessKeyID, SecretAccessKey: secretAccessKey})
 }
 
-// NewWithEndpoint is New for a caller that has the bucket's endpoint URL
-// rather than R2's account ID -- the image pipeline, whose CI secrets
-// (CF_S3_ENDPOINT) have always been the endpoint.
-func NewWithEndpoint(endpoint, bucket, accessKeyID, secretAccessKey string) (*Store, error) {
-	if endpoint == "" || bucket == "" || accessKeyID == "" || secretAccessKey == "" {
+// Open builds a Store from cfg -- any S3-compatible store, not only R2.
+func Open(cfg Config) (*Store, error) {
+	if cfg.Endpoint == "" || cfg.Bucket == "" || cfg.AccessKeyID == "" || cfg.SecretAccessKey == "" {
 		return nil, fmt.Errorf("objectstore: endpoint, bucket, accessKeyID, and secretAccessKey are all required")
+	}
+	if u, err := url.Parse(cfg.Endpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("objectstore: endpoint %q is not an http(s) URL", cfg.Endpoint)
+	}
+	region := cfg.Region
+	if region == "" {
+		region = "auto"
 	}
 
 	client := s3.New(s3.Options{
-		Region:       "auto",
-		BaseEndpoint: aws.String(endpoint),
-		Credentials:  credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
+		Region:       region,
+		BaseEndpoint: aws.String(cfg.Endpoint),
+		UsePathStyle: cfg.PathStyle,
+		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		// Only when an operation requires one: the SDK's default adds
 		// CRC checksum headers to every upload, which S3-compatible
 		// stores don't all accept, and Put's body is already covered by
@@ -74,7 +102,7 @@ func NewWithEndpoint(endpoint, bucket, accessKeyID, secretAccessKey string) (*St
 	})
 
 	return &Store{
-		bucket:  bucket,
+		bucket:  cfg.Bucket,
 		client:  client,
 		presign: s3.NewPresignClient(client),
 	}, nil
