@@ -196,7 +196,7 @@ Enforced on every PR (`lint.yml`), so a bad definition can't merge:
   The server derives the host path from the name and never takes a path
   from a manifest, so this regex is the security boundary -- see 4.
 - Every step exists; `provider`/`kind`/`status` are known values.
-- `rootfs.size_mib` fits the **smallest** box disk (today 8 GiB) --
+- `rootfs.size_mib` fits the **smallest** box disk (today 10 GiB) --
   `TestSizeDisksFitEveryImage` moves here, checked against `size.go`'s
   `fcSizes` (the builder imports `internal/vm` for this, so the two can't
   disagree).

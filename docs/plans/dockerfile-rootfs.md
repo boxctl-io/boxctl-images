@@ -53,7 +53,7 @@ Read from onctl's `internal/providerfc` (`DebugfsRootfsPreparer.Prepare`,
 6. **chrony with the `/dev/ptp0` refclock config** from
    `guest-clock-sync.md`, or a resumed box keeps a stale clock.
 7. **`/opt/.baked`** marker -- the existing static smoke test checks it.
-8. **Fits the smallest box disk** (8 GiB) -- `TestSizeDisksFitEveryImage`
+8. **Fits the smallest box disk** (10 GiB) -- `TestSizeDisksFitEveryImage`
    today, `boxctl-image validate` in the catalog plan.
 
 ## Layout
