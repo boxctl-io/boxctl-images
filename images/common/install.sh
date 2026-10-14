@@ -25,7 +25,7 @@ apt-get update
 apt-get install -y --no-install-recommends \
   systemd systemd-sysv udev openssh-server chrony sudo \
   curl ca-certificates iproute2 iputils-ping netbase \
-  e2fsprogs
+  e2fsprogs tmux
 
 # docs/plans/guest-clock-sync.md
 install -D -m 0644 /boxctl/boxctl-resume.conf /etc/chrony/conf.d/boxctl-resume.conf

@@ -63,7 +63,7 @@ trap 'umount "$MOUNT" 2>/dev/null || true' EXIT
 
 DEBOOTSTRAP_ARGS=(
   --variant=minbase
-  --include=systemd,systemd-sysv,udev,openssh-server,curl,ca-certificates,iproute2,iputils-ping,sudo,netbase
+  --include=systemd,systemd-sysv,udev,openssh-server,curl,ca-certificates,iproute2,iputils-ping,sudo,netbase,tmux
 )
 # Same mirror-probe as bake-desktop-image.sh: mirror.hetzner.com is only
 # reachable from inside Hetzner's own network, and this script also runs
