@@ -6,16 +6,24 @@
 # GitHub credential forwarding.
 #
 # Deliberately not language toolchains (python3, build-essential, node):
-# those vary per project, and `apt-get install` on a box is quick. Nor
-# Claude Code: `boxctl claude` installs it with Anthropic's installer at
-# first use, rather than this image redistributing it.
+# those vary per project, and `apt-get install` on a box is quick.
+#
+# Claude Code is baked in (Anthropic's installer, below) so a new box
+# doesn't spend its first minute downloading it; `boxctl claude` skips
+# its own install when `claude` is already there, and the installed copy
+# keeps itself updated.
 FROM debian-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       git openssh-client rsync jq ripgrep make \
       procps less file unzip xz-utils \
-      gh tmux \
+      gh tmux curl ca-certificates \
  && apt-get clean
+
+# Claude Code, in /root/.local/bin -- where boxctl claude puts /root/.local/bin
+# on PATH. Not on the image's own PATH: only boxctl's sessions need it.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+ && /root/.local/bin/claude --version
 
 # GitHub credentials forwarded from the attached machine
 # (git-credential-boxctl, gh). git asks the helper for github.com over

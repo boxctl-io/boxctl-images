@@ -4,7 +4,7 @@
   "provider": "fc",
   "source": "baked",
   "label": "Claude Agent",
-  "description": "Debian Slim plus git, gh, rsync, jq, ripgrep, make and tmux -- the tools a coding agent like Claude Code needs, on its first command.",
+  "description": "Debian Slim plus git, gh, rsync, jq, ripgrep, make and tmux, plus Claude Code itself -- what a coding agent needs, ready on its first command.",
   "os": "debian",
   "features": [],
   "size_mib": 4096,
