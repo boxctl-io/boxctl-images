@@ -96,15 +96,20 @@ K8S_SYMBOLS="NETFILTER_XT_MATCH_STATISTIC NETFILTER_XT_MATCH_ADDRTYPE NETFILTER_
   NETFILTER_XT_SET NETFILTER_XT_MATCH_PHYSDEV NETFILTER_XT_MATCH_LIMIT NETFILTER_XT_TARGET_NFLOG
   NETFILTER_NETLINK_LOG"
 
-say "enabling base + Kubernetes netfilter symbols"
-for sym in $BASE_SYMBOLS $K8S_SYMBOLS; do
+# virtio-vsock, the guest end of a box's run-status channel
+# (docs/plans/run-status.md). Built in upstream; asserted so a future base
+# config can't drop it silently.
+VSOCK_SYMBOLS="VSOCKETS VIRTIO_VSOCKETS"
+
+say "enabling base + Kubernetes netfilter + vsock symbols"
+for sym in $BASE_SYMBOLS $K8S_SYMBOLS $VSOCK_SYMBOLS; do
   ./scripts/config --enable "$sym"
 done
 make olddefconfig
 
 say "verifying every symbol landed as built-in (not =m)"
 failed=0
-for sym in $BASE_SYMBOLS $K8S_SYMBOLS; do
+for sym in $BASE_SYMBOLS $K8S_SYMBOLS $VSOCK_SYMBOLS; do
   val=$(./scripts/config --state "$sym")
   if [ "$val" != "y" ]; then
     echo "ERROR: CONFIG_${sym}=${val} (expected y) -- boxes have no /lib/modules, so =m is as good as =n" >&2
