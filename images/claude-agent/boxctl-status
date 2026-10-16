@@ -1,0 +1,42 @@
+#!/bin/sh
+# boxctl-status: send one run-status message to this box's host -- the
+# box side of docs/plans/run-status.md. Reads a JSON object from stdin
+# (one line; `boxctl claude --goal`'s runner pipes its status.json in),
+# sends it over the box's vsock device to the host (CID 2) on port 1024,
+# where boxctl-tunnel-agent passes it to the control plane, and exits 0
+# once the host answers "ok".
+#
+# Best effort, never in the way of the run calling it:
+#   - a box with no vsock device (created before onctl added them) exits
+#     0 at once -- /dev/vsock alone proves nothing, the kernel makes it
+#     either way; the virtio device (ID 0x0013) is what says the host is
+#     there;
+#   - anything else is retried with backoff for up to two minutes (the
+#     host agent may not be listening yet, or the control plane may be
+#     away), then given up on with a note on stderr and exit 0.
+#
+# The message ends at its newline: the host reads one line and never
+# waits for end-of-stream (a guest's half-close doesn't reach it). Keep
+# the port and that framing in step with internal/runstatus.
+set -u
+
+PORT=1024
+GIVE_UP_AFTER=120
+
+grep -qsx 0x0013 /sys/bus/virtio/devices/*/device || exit 0
+
+msg=$(tr -d '\r\n')
+[ -n "$msg" ] || { echo "boxctl-status: nothing on stdin" >&2; exit 1; }
+
+deadline=$(( $(date +%s) + GIVE_UP_AFTER ))
+delay=1
+while :; do
+  reply=$(printf '%s\n' "$msg" | timeout 30 socat -t 25 - "VSOCK-CONNECT:2:$PORT" 2>&1)
+  [ "$reply" = ok ] && exit 0
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "boxctl-status: gave up: ${reply:-no answer from the host}" >&2
+    exit 0
+  fi
+  sleep "$delay"
+  [ "$delay" -lt 16 ] && delay=$((delay * 2))
+done

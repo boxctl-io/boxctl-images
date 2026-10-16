@@ -17,7 +17,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       git openssh-client rsync jq ripgrep make \
       procps less file unzip xz-utils \
-      gh tmux curl ca-certificates \
+      gh tmux curl ca-certificates socat \
  && apt-get clean
 
 # Claude Code, in /root/.local/bin -- where boxctl claude puts /root/.local/bin
@@ -31,6 +31,10 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 # usually has -- are rewritten to https so they go through it too, since
 # the box has no SSH key for GitHub.
 COPY --chmod=0755 git-credential-boxctl gh /usr/local/bin/
+# boxctl-status: a run's reports to the control plane, over the box's
+# vsock device (docs/plans/run-status.md) -- hence socat, which speaks
+# AF_VSOCK where the shell can't.
+COPY --chmod=0755 boxctl-status /usr/local/bin/
 COPY boxctl-forwarding.conf /etc/ssh/sshd_config.d/
 RUN mkdir -p -m 0700 /root/.boxctl \
  && git config --system credential.https://github.com.helper boxctl \
