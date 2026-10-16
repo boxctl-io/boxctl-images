@@ -1,10 +1,15 @@
 #!/bin/sh
-# boxctl-status: send one run-status message to this box's host -- the
-# box side of docs/plans/run-status.md. Reads a JSON object from stdin
-# (one line; `boxctl claude --goal`'s runner pipes its status.json in),
-# sends it over the box's vsock device to the host (CID 2) on port 1024,
-# where boxctl-tunnel-agent passes it to the control plane, and exits 0
-# once the host answers "ok".
+# boxctl-status [FILE]: send one run-status message to this box's host --
+# the box side of docs/plans/run-status.md. The message is a JSON object
+# (one line), from FILE or else stdin; it goes over the box's vsock device
+# to the host (CID 2) on port 1024, where boxctl-tunnel-agent passes it to
+# the control plane, and this exits 0 once the host answers "ok".
+#
+# With FILE -- what `boxctl claude --goal`'s runner does with its
+# status.json -- sends to it are one at a time (flock on FILE.lock), and
+# each attempt re-reads FILE. So when a run changes status quickly and
+# sends run in the background, the last one through is the newest
+# status, never an older one overtaking it.
 #
 # Best effort, never in the way of the run calling it:
 #   - a box with no vsock device (created before onctl added them) exits
@@ -25,13 +30,21 @@ GIVE_UP_AFTER=120
 
 grep -qsx 0x0013 /sys/bus/virtio/devices/*/device || exit 0
 
-msg=$(tr -d '\r\n')
-[ -n "$msg" ] || { echo "boxctl-status: nothing on stdin" >&2; exit 1; }
+file=${1:-}
+if [ -n "$file" ]; then
+  exec 9>"$file.lock"
+  flock 9
+  read_msg() { tr -d '\r\n' <"$file"; }
+else
+  stdin=$(tr -d '\r\n')
+  read_msg() { printf '%s' "$stdin"; }
+fi
+[ -n "$(read_msg)" ] || { echo "boxctl-status: no message" >&2; exit 1; }
 
 deadline=$(( $(date +%s) + GIVE_UP_AFTER ))
 delay=1
 while :; do
-  reply=$(printf '%s\n' "$msg" | timeout 30 socat -t 25 - "VSOCK-CONNECT:2:$PORT" 2>&1)
+  reply=$(read_msg | { cat; echo; } | timeout 30 socat -t 25 - "VSOCK-CONNECT:2:$PORT" 2>&1)
   [ "$reply" = ok ] && exit 0
   if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "boxctl-status: gave up: ${reply:-no answer from the host}" >&2
