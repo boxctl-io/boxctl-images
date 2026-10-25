@@ -16,9 +16,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"time"
@@ -331,7 +331,17 @@ const DefinitionFile = "image.json"
 // Unknown fields are an error, so a typo can't silently do nothing, and
 // each image's name must match its directory.
 func LoadDefinitions(dir string) ([]Definition, error) {
-	entries, err := os.ReadDir(dir)
+	if _, err := os.Stat(dir); err != nil {
+		return nil, err
+	}
+	return LoadDefinitionsFS(os.DirFS(dir))
+}
+
+// LoadDefinitionsFS is LoadDefinitions over any filesystem -- the images
+// package's embedded copy of images/, for a consumer that has the module
+// but not the directory (the boxctl-vms server).
+func LoadDefinitionsFS(fsys fs.FS) ([]Definition, error) {
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, err
 	}
@@ -340,9 +350,9 @@ func LoadDefinitions(dir string) ([]Definition, error) {
 		if !e.IsDir() {
 			continue
 		}
-		file := filepath.Join(dir, e.Name(), DefinitionFile)
-		data, err := os.ReadFile(file)
-		if errors.Is(err, os.ErrNotExist) {
+		file := path.Join(e.Name(), DefinitionFile)
+		data, err := fs.ReadFile(fsys, file)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {
