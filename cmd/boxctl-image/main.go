@@ -9,7 +9,6 @@
 //	boxctl-image build <name> [-out <path>] [-from-tar <tar> | -tar-only <tar>]
 //	boxctl-image convert <ref> [-name <name>] [-out <path>] [-size-mib <n>]
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
-//	boxctl-image publish-agent [-dir scripts/agent] [-git-sha <sha>]
 //
 // build makes the image at its host path with a <path>.sha256sum sidecar
 // beside it: from images/<name>/Dockerfile (build.go), or by running its
@@ -27,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"boxctl-vms/internal/imagecatalog"
-	"boxctl-vms/internal/objectstore"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
+	"github.com/boxctl-io/boxctl-images/objectstore"
 )
 
 const usage = `usage:
@@ -37,9 +36,8 @@ const usage = `usage:
   boxctl-image build <name> [-images dir] [-scripts dir] [-out path] [-from-tar tar | -tar-only tar]
   boxctl-image convert <ref> [-images dir] [-name name] [-out path] [-size-mib n] [-no-service] [-from-tar tar | -tar-only tar]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
-  boxctl-image publish-agent [-dir scripts/agent] [-git-sha sha]
 
-publish and publish-agent read CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
+publish reads CF_ACCESS_KEY, CF_SECRET_ACCESS_KEY and CF_S3_ENDPOINT, and
 CF_BUCKET (default boxctl-vms). For a store other than R2, CF_S3_REGION sets the signing
 region (default auto) and CF_S3_PATH_STYLE=true addresses the bucket by path.
 `
@@ -61,8 +59,6 @@ func main() {
 		err = runConvert(os.Args[2:])
 	case "publish":
 		err = runPublish(os.Args[2:])
-	case "publish-agent":
-		err = runPublishAgent(os.Args[2:])
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)

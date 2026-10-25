@@ -17,9 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"boxctl-vms/internal/imagecatalog"
-	"boxctl-vms/internal/objectstore"
-	"boxctl-vms/internal/vm"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
+	"github.com/boxctl-io/boxctl-images/objectstore"
 )
 
 // store is the slice of objectstore.Store publishing needs, so tests can
@@ -53,13 +52,7 @@ type publisher struct {
 }
 
 func newPublisher(s store) *publisher {
-	minDisk := int64(0)
-	for _, sz := range vm.Sizes() {
-		if b := int64(sz.DiskMiB) << 20; minDisk == 0 || b < minDisk {
-			minDisk = b
-		}
-	}
-	return &publisher{store: s, compress: zstdCompress, now: time.Now, minDiskBytes: minDisk}
+	return &publisher{store: s, compress: zstdCompress, now: time.Now, minDiskBytes: int64(imagecatalog.SmallestBoxDiskMiB) << 20}
 }
 
 type publishRequest struct {

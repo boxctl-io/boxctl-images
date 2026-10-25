@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"boxctl-vms/internal/imagecatalog"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
 )
 
 // matrixEntry is one build-fc-images.yml job. Rebuild false means only

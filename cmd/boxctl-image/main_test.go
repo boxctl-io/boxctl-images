@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"boxctl-vms/internal/imagecatalog"
-	"boxctl-vms/internal/objectstore"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
+	"github.com/boxctl-io/boxctl-images/objectstore"
 )
 
 // TestRepoImagesValid is the gate on images/: every definition in the

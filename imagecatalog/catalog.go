@@ -24,6 +24,13 @@ import (
 	"time"
 )
 
+// SmallestBoxDiskMiB is the smallest disk a box can have (boxctl-vms's
+// internal/vm size table, its "small"): an image bigger than it couldn't
+// boot at that size, since onctl won't shrink one, so publish and
+// validate refuse such an image. boxctl-vms has a test holding the two in
+// step; change them together.
+const SmallestBoxDiskMiB = 10 * 1024
+
 // SchemaVersion is the manifest format this package writes and the only
 // one it reads. A reader skips a manifest with any other version rather
 // than guessing at its fields.

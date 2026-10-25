@@ -1,0 +1,6 @@
+# R2 credentials for publishing by hand (scripts/images/*.sh source it)
+scripts/images/.env.local
+# built images and the tool itself
+*.ext4
+*.vmlinux
+/boxctl-image

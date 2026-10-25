@@ -5,8 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"boxctl-vms/internal/imagecatalog"
-	"boxctl-vms/internal/vm"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
 )
 
 // validate checks every definition and the rules across them, plus how
@@ -61,12 +60,4 @@ func bakeScript(d imagecatalog.Definition) string {
 
 // smallestDiskMiB is the smallest disk a box can have; an image bigger
 // than it couldn't boot at that size (onctl won't shrink one).
-func smallestDiskMiB() int {
-	smallest := 0
-	for _, sz := range vm.Sizes() {
-		if smallest == 0 || sz.DiskMiB < smallest {
-			smallest = sz.DiskMiB
-		}
-	}
-	return smallest
-}
+func smallestDiskMiB() int { return imagecatalog.SmallestBoxDiskMiB }

@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"boxctl-vms/internal/imagecatalog"
+	"github.com/boxctl-io/boxctl-images/imagecatalog"
 )
 
 // Building an image: from images/<name>/Dockerfile when it has one (see
