@@ -296,6 +296,47 @@ func TestBuildExportsTheDockerBuildAsATar(t *testing.T) {
 	}
 }
 
+func TestBuildWritesOnlyTheBakeFile(t *testing.T) {
+	var ran [][]string
+	b := &builder{run: func(name string, args ...string) error {
+		ran = append(ran, append([]string{name}, args...))
+		return nil
+	}}
+	bake := filepath.Join(t.TempDir(), "bake.json")
+	err := b.build(buildRequest{
+		def: find(t, "claude-agent"), imagesDir: "../../images", scriptsDir: "../../scripts/images",
+		out: filepath.Join(t.TempDir(), "claude-agent.ext4"), bakeOnly: bake,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 0 {
+		t.Fatalf("ran %v, want nothing: the bake is the caller's", ran)
+	}
+	data, err := os.ReadFile(bake)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Target map[string]bakeTarget `json:"target"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	// The whole graph, so the caller's bake builds debian-slim and mounts
+	// common the way build does.
+	if c := got.Target["claude-agent"].Contexts; c["debian-slim"] != "target:debian-slim" {
+		t.Errorf("claude-agent contexts %v", c)
+	}
+	if c := got.Target["debian-slim"].Contexts; !strings.HasSuffix(c["common"], filepath.Join("images", "common")) {
+		t.Errorf("debian-slim contexts %v", c)
+	}
+
+	if err := b.build(buildRequest{def: find(t, "desktop"), imagesDir: "../../images", bakeOnly: bake}); err == nil {
+		t.Fatal("an image without a Dockerfile has no bake file to write")
+	}
+}
+
 func TestValidateRejects(t *testing.T) {
 	base := func() map[string]string {
 		return map[string]string{

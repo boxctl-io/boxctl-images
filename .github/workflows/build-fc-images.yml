@@ -1,6 +1,7 @@
 name: build-fc-images
 
-# Bakes and publishes boxctl-vms's own Firecracker rootfs images to
+# Bakes and publishes boxctl's Firecracker rootfs images (the ones the
+# boxctl-vms server offers) to
 # Cloudflare R2 whenever one of them changes -- no more hand-running
 # scripts/images/bake-*.sh over SSH on aimax for a routine rebuild.
 #

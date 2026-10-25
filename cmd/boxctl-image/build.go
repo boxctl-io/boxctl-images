@@ -200,6 +200,11 @@ type buildRequest struct {
 	fromTar string
 	// tarOnly stops after the Docker build, leaving the filesystem tar here.
 	tarOnly string
+	// bakeOnly stops before the Docker build, writing the bake file here:
+	// for a `docker buildx bake` of one's own, with the same build graph
+	// but, say, another platform and a registry push (the OCI publish of
+	// claude-agent in .github/workflows/publish-oci-images.yml).
+	bakeOnly string
 }
 
 type builder struct {
@@ -227,10 +232,21 @@ func newBuilder() *builder {
 func (b *builder) build(req buildRequest) error {
 	d := req.def
 	if !hasDockerfile(req.imagesDir, d.Name) {
-		if req.fromTar != "" || req.tarOnly != "" {
+		if req.fromTar != "" || req.tarOnly != "" || req.bakeOnly != "" {
 			return fmt.Errorf("%s is built by its bake script, not a Dockerfile", d.Name)
 		}
 		return b.run("bash", filepath.Join(req.scriptsDir, bakeScript(d)))
+	}
+	if req.bakeOnly != "" {
+		bake, err := bakeFile(req.imagesDir, d.Name)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(req.bakeOnly, bake, 0o644); err != nil {
+			return err
+		}
+		log.Printf("bake file for %s (target %s) written to %s", d.Name, bakeTargetName(d.Name), req.bakeOnly)
+		return nil
 	}
 	if d.Kind != imagecatalog.KindRootfs || d.SizeMiB <= 0 {
 		return fmt.Errorf("%s: a Dockerfile image must be a rootfs with size_mib set", d.Name)

@@ -12,6 +12,10 @@
 # doesn't spend its first minute downloading it; `boxctl claude` skips
 # its own install when `claude` is already there, and the installed copy
 # keeps itself updated.
+#
+# Also published as an OCI image, ghcr.io/boxctl-io/claude-agent (amd64 and
+# arm64; .github/workflows/publish-oci-images.yml), for onctl's ac
+# provider, which runs it as an Apple container.
 FROM debian-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
