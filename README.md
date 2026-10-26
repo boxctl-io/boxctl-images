@@ -11,7 +11,9 @@ consumes them:
   the published catalog, and [`objectstore`](objectstore) to reach R2.
 - **onctl's `ac` provider** (Apple containers on a Mac) runs
   `claude-agent` as an OCI image, `ghcr.io/boxctl-io/claude-agent`, built
-  for amd64 and arm64 by `publish-oci-images.yml` from the same Dockerfile.
+  for amd64 and arm64 by `publish-oci-images.yml` from the same Dockerfile;
+  `ghcr.io/boxctl-io/claude-agent-go` is published the same way, for a Go
+  project (`onctl -p ac claude --image ghcr.io/boxctl-io/claude-agent-go`).
 
 This used to be part of [boxctl-vms](https://github.com/cdalar/boxctl-vms)
 (`images/`, `cmd/boxctl-image`, `internal/imagecatalog`); the history
