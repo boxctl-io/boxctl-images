@@ -203,7 +203,8 @@ type buildRequest struct {
 	// bakeOnly stops before the Docker build, writing the bake file here:
 	// for a `docker buildx bake` of one's own, with the same build graph
 	// but, say, another platform and a registry push (the OCI publish of
-	// claude-agent in .github/workflows/publish-oci-images.yml).
+	// claude-agent and claude-agent-go in
+	// .github/workflows/publish-oci-images.yml).
 	bakeOnly string
 }
 

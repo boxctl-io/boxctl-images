@@ -8,20 +8,26 @@
 #
 # Go from go.dev's own tarball, not Debian's golang package, which lags a
 # release or two behind what go.mod files ask for. Pinned with its sha256
-# so a build is reproducible; bumping GO_VERSION (and GO_SHA256, from
-# https://go.dev/dl/?mode=json) is a change to this file, which is what
-# makes build-fc-images.yml rebuild. A go.mod asking for a newer Go still
-# works: GOTOOLCHAIN's default (auto) downloads that one.
+# per architecture so a build is reproducible; bumping GO_VERSION (and
+# both GO_SHA256_* from https://go.dev/dl/?mode=json) is a change to this
+# file, which is what makes build-fc-images.yml rebuild. A go.mod asking
+# for a newer Go still works: GOTOOLCHAIN's default (auto) downloads that
+# one. TARGETARCH is buildx's: amd64 for the Firecracker rootfs, arm64 too
+# for the OCI image publish-oci-images.yml pushes (onctl's ac provider on
+# a Mac).
 #
 # gcc and libc6-dev for cgo and `go test -race`, which need a C compiler.
 FROM claude-agent
+ARG TARGETARCH
 ARG GO_VERSION=1.27.2
-ARG GO_SHA256=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5
+ARG GO_SHA256_amd64=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5
+ARG GO_SHA256_arm64=94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8
 RUN apt-get update \
  && apt-get install -y --no-install-recommends gcc libc6-dev \
  && apt-get clean \
- && curl -fsSL -o /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
- && echo "${GO_SHA256}  /tmp/go.tgz" | sha256sum -c - \
+ && case "$TARGETARCH" in amd64) sha=$GO_SHA256_amd64;; arm64) sha=$GO_SHA256_arm64;; *) echo "no Go checksum for $TARGETARCH" >&2; exit 1;; esac \
+ && curl -fsSL -o /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
+ && echo "${sha}  /tmp/go.tgz" | sha256sum -c - \
  && tar -C /usr/local -xzf /tmp/go.tgz \
  && rm /tmp/go.tgz
 

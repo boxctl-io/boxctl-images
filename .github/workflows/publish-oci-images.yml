@@ -1,18 +1,21 @@
 name: publish-oci-images
 
-# Publishes images/claude-agent as an OCI image, ghcr.io/boxctl-io/claude-agent,
+# Publishes images/claude-agent and images/claude-agent-go as OCI images,
+# ghcr.io/boxctl-io/claude-agent and ghcr.io/boxctl-io/claude-agent-go,
 # for linux/amd64 and linux/arm64. build-fc-images.yml turns the same
-# Dockerfile into the ext4 rootfs Firecracker boxes boot and is unchanged;
+# Dockerfiles into the ext4 rootfs Firecracker boxes boot and is unchanged;
 # this is for runtimes that take a container image instead -- onctl's ac
-# provider runs it as an Apple container on a Mac (arm64, hence the second
-# platform), and gets sshd, tmux, git, gh and Claude Code ready-made rather
-# than installing them on every new sandbox.
+# provider runs them as Apple containers on a Mac (arm64, hence the second
+# platform), and gets sshd, tmux, git, gh and Claude Code (plus Go, for the
+# -go image) ready-made rather than installing them on every new sandbox.
 #
-# The build graph (debian-slim as a stage, images/common as a context) is
-# the one `boxctl-image build` generates; -bake-only writes it out for the
-# `docker buildx bake` here, which adds the platforms and the push. The
-# package is public (set once in its GitHub settings), so `container run`
-# pulls it with no login.
+# The build graph (debian-slim and claude-agent as stages, images/common as
+# a context) is the one `boxctl-image build` generates for the -go image,
+# which has the other as a stage; -bake-only writes it out for the one
+# `docker buildx bake` here, which adds the platforms, the tags and the
+# push, so claude-agent's layers are built once for both. The packages are
+# public (set once in their GitHub settings, after the org allowed public
+# packages), so `container run` pulls them with no login.
 
 permissions:
   contents: read
@@ -23,6 +26,7 @@ on:
     branches: [main]
     paths:
       - images/claude-agent/**
+      - images/claude-agent-go/**
       - images/debian-slim/**
       - images/common/**
       - cmd/boxctl-image/**
@@ -30,12 +34,14 @@ on:
   workflow_dispatch: {}
 
 env:
-  IMAGE: claude-agent
-  REGISTRY_IMAGE: ghcr.io/boxctl-io/claude-agent
+  # The image whose bake file has every target; the others are its stages.
+  IMAGE: claude-agent-go
+  IMAGES: claude-agent claude-agent-go
+  REGISTRY: ghcr.io/boxctl-io
 
 jobs:
   build-and-push:
-    name: Build and push claude-agent
+    name: Build and push claude-agent, claude-agent-go
     runs-on: onctl-2
     timeout-minutes: 60
     steps:
@@ -72,9 +78,13 @@ jobs:
         run: |
           set -euo pipefail
           short=$(git rev-parse --short=7 "$GITHUB_SHA")
-          docker buildx bake -f "$RUNNER_TEMP/bake.json" "$IMAGE" --push \
-            --set '*.platform=linux/amd64' --set '*.platform=linux/arm64' \
-            --set "$IMAGE.tags=$REGISTRY_IMAGE:latest" \
-            --set "$IMAGE.tags=$REGISTRY_IMAGE:sha-$short" \
-            --set "$IMAGE.cache-from=type=gha,scope=$IMAGE" \
-            --set "$IMAGE.cache-to=type=gha,scope=$IMAGE,mode=max"
+          set -- --set '*.platform=linux/amd64' --set '*.platform=linux/arm64'
+          for image in $IMAGES; do
+            set -- "$@" \
+              --set "$image.tags=$REGISTRY/$image:latest" \
+              --set "$image.tags=$REGISTRY/$image:sha-$short" \
+              --set "$image.cache-from=type=gha,scope=$image" \
+              --set "$image.cache-to=type=gha,scope=$image,mode=max"
+          done
+          # shellcheck disable=SC2086 # IMAGES is a word list
+          docker buildx bake -f "$RUNNER_TEMP/bake.json" $IMAGES --push "$@"
