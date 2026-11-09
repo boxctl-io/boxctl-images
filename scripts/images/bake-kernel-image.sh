@@ -29,6 +29,12 @@
 #   - k3s's embedded NetworkPolicy controller (kube-router): ipset
 #     (IP_SET + the hash types it creates, NETFILTER_XT_SET), -m physdev,
 #     -m limit and the NFLOG target
+#   - Calico (RKE2's default CNI for a cluster Rancher provisions): the CT
+#     target, which iptables-nft uses for -j NOTRACK, and -m rpfilter, both
+#     in the raw table Felix programs first. Without CT every raw-table
+#     restore fails ("Extension CT revision 0 not supported"), Felix panics
+#     after its retries, and the node stays tainted network-unavailable.
+#     Canal never writes them, so RKE2's own default didn't notice.
 #
 # No /lib/modules ships in any box image, so everything must be =y; the
 # verification step below fails the bake if olddefconfig downgraded any of
@@ -94,7 +100,8 @@ K8S_SYMBOLS="NETFILTER_XT_MATCH_STATISTIC NETFILTER_XT_MATCH_ADDRTYPE NETFILTER_
   NFT_NUMGEN NFT_FIB NFT_FIB_IPV4 NFT_FIB_IPV6 NFT_FIB_INET NFT_CT NFT_NAT NFT_MASQ NFT_REJECT
   IP_SET IP_SET_HASH_IP IP_SET_HASH_IPPORT IP_SET_HASH_IPPORTIP IP_SET_HASH_IPPORTNET IP_SET_HASH_NET
   NETFILTER_XT_SET NETFILTER_XT_MATCH_PHYSDEV NETFILTER_XT_MATCH_LIMIT NETFILTER_XT_TARGET_NFLOG
-  NETFILTER_NETLINK_LOG"
+  NETFILTER_NETLINK_LOG
+  NETFILTER_XT_TARGET_CT NETFILTER_XT_TARGET_NOTRACK IP_NF_MATCH_RPFILTER IP6_NF_MATCH_RPFILTER"
 
 # virtio-vsock, the guest end of a box's run-status channel
 # (docs/plans/run-status.md). Built in upstream; asserted so a future base
