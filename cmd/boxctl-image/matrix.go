@@ -29,7 +29,7 @@ const builderFile = "cmd/boxctl-image/build.go"
 // built reports whether build-fc-images.yml builds d. The kernel has its
 // own workflow.
 func built(d imagecatalog.Definition) bool {
-	return d.Kind == imagecatalog.KindRootfs
+	return d.Kind == imagecatalog.KindRootfs && d.Source != imagecatalog.SourceExternal
 }
 
 // planMatrix decides what a push builds from the files it changed; nil

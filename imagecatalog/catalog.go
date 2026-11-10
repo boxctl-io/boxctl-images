@@ -45,6 +45,9 @@ const (
 // Providers, matching onctl's -p values and VM.Provider.
 const (
 	ProviderFC = "fc"
+	// ProviderCH is Cloud Hypervisor, for the Windows guest only: a UEFI
+	// firmware boot Firecracker can't do.
+	ProviderCH = "ch"
 )
 
 // Statuses. See image-catalog.md's status table for what each one means
@@ -61,6 +64,11 @@ const (
 	// SourceBaked: built and published by CI (build-fc-images.yml or
 	// build-fc-kernel.yml).
 	SourceBaked = "baked"
+	// SourceExternal: prepared out of band (the Windows image) and seeded
+	// onto a host by hand. Never built, uploaded or published, so it has
+	// no manifest: the server boots it from its definition alone, on the
+	// hosts that report having it.
+	SourceExternal = "external"
 )
 
 // Features.
@@ -69,9 +77,12 @@ const (
 	FeatureDesktop = "desktop"
 )
 
-// FCImageDir is where every host keeps its images, and where
-// boxctl-vms-agent.sh's host_images reports them from.
-const FCImageDir = "/opt/fc/images"
+// Image directories on a host, where boxctl-vms-agent.sh's host_images
+// reports images from.
+const (
+	FCImageDir = "/opt/fc/images"
+	CHImageDir = "/opt/win-images"
+)
 
 // ManifestPrefix is where manifests live in the images bucket.
 const ManifestPrefix = "catalog/"
@@ -95,7 +106,7 @@ type Definition struct {
 	// Label and Description are what boxctl-web and the boxctl CLI show.
 	Label       string `json:"label"`
 	Description string `json:"description"`
-	// OS is the guest's distro family ("debian", "ubuntu"),
+	// OS is the guest's distro family ("debian", "ubuntu", "windows"),
 	// for an icon -- not a version.
 	OS       string   `json:"os"`
 	Features []string `json:"features"`
@@ -119,11 +130,22 @@ func (d Definition) Validate() error {
 	default:
 		return fmt.Errorf("%s: kind %q must be %q or %q", d.Name, d.Kind, KindRootfs, KindKernel)
 	}
-	if d.Provider != ProviderFC {
-		return fmt.Errorf("%s: provider %q must be %q", d.Name, d.Provider, ProviderFC)
-	}
-	if d.Source != SourceBaked {
-		return fmt.Errorf("%s: source %q must be %q", d.Name, d.Source, SourceBaked)
+	switch d.Provider {
+	case ProviderFC:
+		if d.Source != SourceBaked {
+			return fmt.Errorf("%s: source %q must be %q for provider %q", d.Name, d.Source, SourceBaked, ProviderFC)
+		}
+	case ProviderCH:
+		// Only ever the hand-seeded Windows image: there is no ch kernel,
+		// and nothing builds a ch image.
+		if d.Kind != KindRootfs || d.Source != SourceExternal {
+			return fmt.Errorf("%s: a %q image must be an %q rootfs", d.Name, ProviderCH, SourceExternal)
+		}
+		if d.SizeMiB != 0 || d.Default {
+			return fmt.Errorf("%s: an %q image has no size_mib and can't be the default", d.Name, SourceExternal)
+		}
+	default:
+		return fmt.Errorf("%s: provider %q must be %q or %q", d.Name, d.Provider, ProviderFC, ProviderCH)
 	}
 	switch d.Status {
 	case StatusAvailable, StatusHidden, StatusDeprecated, StatusRetired:
@@ -178,10 +200,14 @@ func ValidateSet(defs []Definition) error {
 
 // HostPath is where every host keeps d's image.
 func HostPath(d Definition) string {
-	if d.Kind == KindKernel {
+	switch {
+	case d.Kind == KindKernel:
 		return path.Join(FCImageDir, d.Name+".vmlinux")
+	case d.Provider == ProviderCH:
+		return path.Join(CHImageDir, d.Name+".raw")
+	default:
+		return path.Join(FCImageDir, d.Name+".ext4")
 	}
-	return path.Join(FCImageDir, d.Name+".ext4")
 }
 
 // objectPrefix is the R2 prefix d's generations are published under:
