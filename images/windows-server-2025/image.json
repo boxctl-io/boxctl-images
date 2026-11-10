@@ -1,0 +1,12 @@
+{
+  "name": "windows-server-2025",
+  "kind": "rootfs",
+  "provider": "ch",
+  "source": "external",
+  "label": "Windows Server 2025",
+  "description": "Windows Server 2025 on Cloud Hypervisor (UEFI boot, cloudbase-init). Terminal only, as Administrator in cmd.exe; no desktop, pause or backup.",
+  "os": "windows",
+  "features": [],
+  "status": "available",
+  "default": false
+}

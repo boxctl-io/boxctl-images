@@ -75,6 +75,11 @@ type publishRequest struct {
 // never sees a manifest pointing at something that isn't there.
 func (p *publisher) publish(ctx context.Context, req publishRequest) (imagecatalog.Manifest, error) {
 	def := req.def
+	if def.Source == imagecatalog.SourceExternal {
+		// A manifest would make the server try to fetch it onto hosts
+		// that lack it -- 40 GB of Windows disk, from nowhere.
+		return imagecatalog.Manifest{}, fmt.Errorf("%s is an external image, seeded onto hosts by hand; it isn't published", def.Name)
+	}
 	prev, err := p.currentManifest(ctx, def.Name)
 	if err != nil {
 		return imagecatalog.Manifest{}, err

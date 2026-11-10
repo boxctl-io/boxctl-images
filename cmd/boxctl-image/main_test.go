@@ -60,6 +60,7 @@ func TestPlanMatrix(t *testing.T) {
 		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true,ubuntu-26.04:true"},
 		"a Dockerfile image's definition only": {[]string{"images/ubuntu-26.04/image.json"}, "ubuntu-26.04:false"},
 		"nothing changed at all":               {[]string{}, ""},
+		"an external image isn't built":        {[]string{"images/windows-server-2025/image.json"}, ""},
 	}
 	for name, c := range cases {
 		if got := names(planMatrix("../../images", d, c.changed)); got != c.want {
@@ -285,6 +286,9 @@ func TestPublishRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := testPublisher(newMemStore())
 
+	if _, err := p.publish(ctx, publishRequest{def: find(t, "windows-server-2025"), metadataOnly: true}); err == nil {
+		t.Error("the external Windows image was published")
+	}
 	if _, err := p.publish(ctx, publishRequest{def: find(t, "debian-slim"), metadataOnly: true}); err == nil {
 		t.Error("metadata-only publish of a never-published image succeeded")
 	}

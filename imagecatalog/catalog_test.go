@@ -48,6 +48,11 @@ func TestPathsAndKeysMatchWhatHostsAndR2AlreadyHold(t *testing.T) {
 		{rootfs("ubuntu-26.04"), "/opt/fc/images/ubuntu-26.04.ext4", "images/ubuntu-26.04.ext4-aaaaaaa.zst", "images/latest/ubuntu-26.04.ext4.zst"},
 		{kernel(), "/opt/fc/images/boxctl-kernel.vmlinux", "kernel/boxctl-kernel.vmlinux-aaaaaaa.zst", "kernel/latest/boxctl-kernel.vmlinux.zst"},
 	}
+	// The Windows image is never published, so only its host path counts:
+	// where aimax has it seeded.
+	if got := HostPath(windows()); got != "/opt/win-images/windows-server-2025.raw" {
+		t.Errorf("HostPath(windows) = %q", got)
+	}
 	for _, c := range cases {
 		if got := HostPath(c.def); got != c.path {
 			t.Errorf("HostPath(%s) = %q, want %q", c.def.Name, got, c.path)
@@ -97,9 +102,9 @@ func TestDefinitionValidate(t *testing.T) {
 		"unknown feature":     func(d *Definition) { d.Features = []string{"gpu"} },
 		"missing label":       func(d *Definition) { d.Label = "" },
 		"hidden default":      func(d *Definition) { d.Default, d.Status = true, StatusHidden },
-		"ch provider":         func(d *Definition) { d.Provider = "ch" },
+		"baked ch":            func(d *Definition) { d.Provider = ProviderCH },
 		"unknown source":      func(d *Definition) { d.Source = "manual" },
-		"external source":     func(d *Definition) { d.Source = "external" },
+		"external fc":         func(d *Definition) { d.Source = SourceExternal },
 		"retired default too": func(d *Definition) { d.Default, d.Status = true, StatusRetired },
 	}
 	for name, mutate := range mutations {
@@ -108,6 +113,29 @@ func TestDefinitionValidate(t *testing.T) {
 		if err := d.Validate(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+
+	if err := windows().Validate(); err != nil {
+		t.Errorf("the Windows image: %v", err)
+	}
+	for name, mutate := range map[string]func(*Definition){
+		"ch kernel":      func(d *Definition) { d.Kind = KindKernel },
+		"ch default":     func(d *Definition) { d.Default = true },
+		"ch with a size": func(d *Definition) { d.SizeMiB = 4096 },
+		"ch, but baked":  func(d *Definition) { d.Source = SourceBaked },
+	} {
+		d := windows()
+		mutate(&d)
+		if err := d.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func windows() Definition {
+	return Definition{
+		Name: "windows-server-2025", Kind: KindRootfs, Provider: ProviderCH, Source: SourceExternal,
+		Label: "W", Description: "w", OS: "windows", Features: []string{}, Status: StatusAvailable,
 	}
 }
 
@@ -215,13 +243,13 @@ func TestParseManifestRejects(t *testing.T) {
 	}
 
 	// The Windows image's manifest, as `publish -register` once wrote it:
-	// still in the bucket, but no longer something a reader accepts, so
-	// it's skipped rather than offered.
+	// still in the bucket, but with no object to fetch, so a reader skips
+	// it -- the image boots from its definition alone.
 	win := `{"schema":1,"name":"windows-server-2025","kind":"rootfs","provider":"ch","source":"external",` +
 		`"label":"W","description":"w","os":"windows","features":[],"status":"available","default":false,` +
 		`"current":{"sha256":"` + sha('c') + `","size_bytes":1,"published_at":"2026-01-01T00:00:00Z"}}`
 	if _, err := ParseManifest([]byte(win)); err == nil {
-		t.Error("a ch/external manifest was accepted")
+		t.Error("a manifest with no object was accepted")
 	}
 }
 

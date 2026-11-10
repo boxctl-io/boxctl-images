@@ -22,6 +22,9 @@ func validate(imagesDir, scriptsDir string) ([]imagecatalog.Definition, error) {
 	}
 	minDisk := smallestDiskMiB()
 	for _, d := range defs {
+		if d.Source == imagecatalog.SourceExternal {
+			continue // nothing here builds it
+		}
 		script := filepath.Join(scriptsDir, bakeScript(d))
 		_, err := os.Stat(script)
 		hasScript := err == nil

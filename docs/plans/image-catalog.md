@@ -3,8 +3,9 @@
 > **Status:** rollout steps 1-3 are done -- definitions, `boxctl-image`
 > and manifests (#117), the server reading the catalog (#118) -- and the
 > builder swap is under way (`dockerfile-rootfs.md`, #123). Windows was
-> dropped afterwards (#121), so everything below about `ch`,
-> `windows-server-2025` and external images is history. Still open:
+> dropped afterwards (boxctl-vms#121) and brought back in November 2026
+> for demos, as an external definition only: no `-register`, no
+> manifest -- the server boots it from its definition. Still open:
 > step 4 (the tunnel agent's own image list), step 5 (boxctl-web and the
 > CLI reading `/api/images`). Step 6 is done differently than planned:
 > hosts keep the version they replace rather than fetching old ones back

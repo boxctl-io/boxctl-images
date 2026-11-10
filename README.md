@@ -29,6 +29,13 @@ default. `go test ./cmd/boxctl-image` validates all of them on every PR
 (names, exactly one default, exactly one kernel, and how each image is
 built).
 
+One image isn't built here: `windows-server-2025` (`"provider": "ch"`,
+`"source": "external"`) boots under Cloud Hypervisor from a disk seeded
+onto a host by hand at `/opt/win-images/windows-server-2025.raw`.
+Nothing builds, uploads or publishes it -- `publish` refuses -- so the
+server boots it from its definition alone, on hosts that report having
+it.
+
 An image is built from `images/<name>/Dockerfile`
 ([`docs/plans/dockerfile-rootfs.md`](docs/plans/dockerfile-rootfs.md)) --
 `debian-slim`, `ubuntu-26.04`, `claude-agent` (`FROM debian-slim`,
