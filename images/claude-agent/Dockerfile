@@ -5,8 +5,10 @@
 # (docs/plans/claude-on-the-box.md): gh and tmux, and the box side of
 # GitHub credential forwarding.
 #
-# Deliberately not language toolchains (python3, build-essential, node):
-# those vary per project, and `apt-get install` on a box is quick.
+# Not a project's language toolchain (build-essential, a JDK, a pinned
+# Node): those vary per project, and `apt-get install` on a box is quick.
+# What is here beyond the basics is what the agent itself uses on every
+# run, whatever the project -- see "Evidence tools" below.
 #
 # Claude Code is baked in (Anthropic's installer, below) so a new box
 # doesn't spend its first minute downloading it; `boxctl claude` skips
@@ -23,6 +25,48 @@ RUN apt-get update \
       procps less file unzip xz-utils \
       gh tmux curl ca-certificates socat \
  && apt-get clean
+
+# Evidence tools: what an unattended run (`boxctl claude --goal`) needs to
+# show its result, not just describe it -- screenshots and a video of a
+# web page (Playwright driving headless Chromium), a terminal recording
+# (asciinema, turned into a GIF by agg) -- plus python3, which agents
+# reach for as a scripting tool so often that its absence was the first
+# thing every run tripped over. Baked in because each run otherwise
+# installs all of it again: about three minutes and 950 MB per box.
+#
+# Node and npm are Debian's (Playwright needs a Node; a project that pins
+# its own still installs its own). Playwright is pinned, with only
+# Chromium's headless shell: the browser build must match the package's
+# version, so a script should use this copy rather than `npm i playwright`
+# (a newer one would download its own browser). /root/node_modules points
+# at the global modules so `import "playwright"` resolves from anywhere
+# under /root, ESM included -- NODE_PATH only helps require(). Playwright
+# brings its own ffmpeg for video; Debian's (another 420 MB) is left out.
+#
+# agg from its release binary, pinned by sha256 per architecture like Go
+# in claude-agent-go (TARGETARCH is buildx's). asciinema refuses to run
+# without a UTF-8 locale, and a Dockerfile's ENV doesn't survive into the
+# rootfs, so /etc/default/locale sets one for sessions that read it;
+# anything else passes LC_ALL=C.UTF-8 itself.
+ARG TARGETARCH
+ARG PLAYWRIGHT_VERSION=1.65.0
+ARG AGG_VERSION=1.9.0
+ARG AGG_SHA256_amd64=f111e315cd71056b116302342553dd765b7297579ed511f111d0cedb442aeda6
+ARG AGG_SHA256_arm64=2b4be407b97e00e1c313a41d154ced8fa3d02c560c8f47a0db4950a2576444c9
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 asciinema nodejs npm \
+ && case "$TARGETARCH" in amd64) agg=x86_64 sha=$AGG_SHA256_amd64;; arm64) agg=aarch64 sha=$AGG_SHA256_arm64;; *) echo "no agg checksum for $TARGETARCH" >&2; exit 1;; esac \
+ && curl -fsSL -o /usr/local/bin/agg "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-${agg}-unknown-linux-gnu" \
+ && echo "${sha}  /usr/local/bin/agg" | sha256sum -c - \
+ && chmod 0755 /usr/local/bin/agg \
+ && npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
+ && playwright install --with-deps --only-shell chromium \
+ && ln -s "$(npm root -g)" /root/node_modules \
+ && echo 'LANG=C.UTF-8' > /etc/default/locale \
+ && npm cache clean --force \
+ && apt-get clean \
+ && agg --version && python3 --version && LC_ALL=C.UTF-8 asciinema --version \
+ && node -e 'require("/root/node_modules/playwright").chromium.launch().then(b => b.close())'
 
 # Claude Code, in /root/.local/bin -- where boxctl claude puts /root/.local/bin
 # on PATH. Not on the image's own PATH: only boxctl's sessions need it.

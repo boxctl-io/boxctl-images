@@ -39,9 +39,10 @@ it.
 An image is built from `images/<name>/Dockerfile`
 ([`docs/plans/dockerfile-rootfs.md`](docs/plans/dockerfile-rootfs.md)) --
 `debian-slim`, `ubuntu-26.04`, `claude-agent` (`FROM debian-slim`,
-plus git, rsync, jq, ripgrep, make, gh, tmux and Claude Code for coding
-agents such as boxctl's Claude Code plugin, and the box side of `boxctl
-claude`'s GitHub credential forwarding), `claude-agent-go` (`FROM
+plus git, rsync, jq, ripgrep, make, gh, tmux, python3 and Claude Code for
+coding agents such as boxctl's Claude Code plugin, the box side of `boxctl
+claude`'s GitHub credential forwarding, and what an unattended run uses to
+show its result: Playwright with headless Chromium, asciinema and agg), `claude-agent-go` (`FROM
 claude-agent`, plus Go and gcc -- what `boxctl claude` picks for a project
 with a `go.mod`; a language image is named `claude-agent-<lang>` so the
 CLI's image picker finds it) and `openai-agents` (`FROM debian-slim`,
