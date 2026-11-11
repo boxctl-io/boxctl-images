@@ -22,7 +22,7 @@ FROM debian-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       git openssh-client rsync jq ripgrep make \
-      procps less file unzip xz-utils \
+      procps less file unzip xz-utils zstd \
       gh tmux curl ca-certificates socat \
  && apt-get clean
 
