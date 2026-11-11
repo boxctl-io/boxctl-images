@@ -4,7 +4,7 @@
   "provider": "fc",
   "source": "baked",
   "label": "Claude Agent (Go)",
-  "description": "Claude Agent plus Go 1.27 and gcc -- what boxctl claude picks for a project with a go.mod.",
+  "description": "Claude Agent plus Go 1.27, gcc, golangci-lint and govulncheck -- what boxctl claude picks for a project with a go.mod.",
   "os": "debian",
   "features": [],
   "size_mib": 4096,
