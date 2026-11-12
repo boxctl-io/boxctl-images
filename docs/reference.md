@@ -81,7 +81,9 @@ Either way `boxctl-image publish` uploads the image to
 rides along as `x-amz-meta-sha256`) and writes `catalog/<name>.json`: the
 definition plus the current generation (sha256, size, object key, commit)
 and the earlier ones. See
-[`docs/plans/image-catalog.md`](plans/image-catalog.md).
+[`docs/plans/image-catalog.md`](plans/image-catalog.md). It then rewrites
+`index.json`, the names of every image with a manifest, for readers who
+can't list the bucket.
 
 The boxctl-vms server reads those manifests (`internal/vm/catalog.go`
 there) every 5 minutes, overlaid on the definitions it ships: a manifest

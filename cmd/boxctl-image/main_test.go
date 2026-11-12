@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -169,6 +170,37 @@ func (m *memStore) Copy(_ context.Context, src, dst string, meta map[string]stri
 	return nil
 }
 
+func (m *memStore) List(_ context.Context, prefix string) ([]string, error) {
+	var keys []string
+	for k := range m.objects {
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
+	}
+	return keys, nil
+}
+
+// TestPublishWritesTheIndex: a reader of the public bucket can't list it,
+// so the index is the only way it learns which images exist -- it has to
+// name every image with a manifest, and nothing else that happens to sit
+// under catalog/.
+func TestPublishWritesTheIndex(t *testing.T) {
+	s := newMemStore()
+	s.objects[imagecatalog.ManifestKey("debian-slim")] = []byte("{}")
+	s.objects[imagecatalog.ManifestPrefix+"notes.txt"] = []byte("x")
+	p := testPublisher(s)
+	if _, err := p.publish(context.Background(), publishRequest{def: find(t, "ubuntu-26.04"), imagePath: writeImage(t, "image contents"), gitSHA: "abc"}); err != nil {
+		t.Fatal(err)
+	}
+	var idx imagecatalog.Index
+	if err := json.Unmarshal(s.objects[imagecatalog.IndexKey], &idx); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+	if got := strings.Join(idx.Images, ","); got != "debian-slim,ubuntu-26.04" {
+		t.Errorf("index lists %q, want the two images with manifests, sorted", got)
+	}
+}
+
 func testPublisher(s *memStore) *publisher {
 	return &publisher{
 		store: s,
@@ -227,8 +259,10 @@ func TestPublish(t *testing.T) {
 		t.Fatalf("published manifest doesn't parse: %v", err)
 	}
 	// The object must land before the manifest that names it.
-	if s.puts[len(s.puts)-1] != imagecatalog.ManifestKey(def.Name) {
-		t.Fatalf("manifest wasn't written last: %v", s.puts)
+	// The image before the manifest naming it, the manifest before the
+	// index naming that: a reader never follows a name to nothing.
+	if n := len(s.puts); n < 3 || s.puts[n-2] != imagecatalog.ManifestKey(def.Name) || s.puts[n-1] != imagecatalog.IndexKey {
+		t.Fatalf("manifest and index weren't written last, in that order: %v", s.puts)
 	}
 
 	// Same image again: no upload, no copy, same generation.
@@ -237,7 +271,7 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.puts) != 1 || len(s.copies) != 0 || m2.Current != m.Current {
+	if len(s.puts) != 2 || len(s.copies) != 0 || m2.Current != m.Current {
 		t.Fatalf("re-publish wasn't idempotent: puts %v copies %v", s.puts, s.copies)
 	}
 
@@ -257,7 +291,7 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m4.Status != imagecatalog.StatusDeprecated || m4.Current != m3.Current || len(s.puts) != 1 {
+	if m4.Status != imagecatalog.StatusDeprecated || m4.Current != m3.Current || len(s.puts) != 2 {
 		t.Fatalf("metadata-only: %+v, puts %v", m4, s.puts)
 	}
 }
