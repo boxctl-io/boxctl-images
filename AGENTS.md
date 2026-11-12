@@ -12,7 +12,7 @@ images published to R2), the boxctl-vms server (which imports
   for the ones not moved to a Dockerfile yet. `images/common/install.sh`
   is what every box rootfs needs; every Dockerfile runs it first.
 - `cmd/boxctl-image`: `validate`, `matrix`, `build`, `convert`,
-  `publish`. See README.md and docs/plans/.
+  `publish`. See README.md, docs/reference.md and docs/plans/.
 - `imagecatalog`: the definitions and the published manifests' schema.
   boxctl-vms depends on this package; keep its exported API stable and
   bump the dependency there when it changes. `SmallestBoxDiskMiB` mirrors
