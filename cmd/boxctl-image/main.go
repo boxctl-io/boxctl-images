@@ -32,6 +32,7 @@ import (
 
 const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
+  boxctl-image list [-images dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
   boxctl-image build <name> [-images dir] [-scripts dir] [-out path] [-from-tar tar | -tar-only tar | -bake-only json]
   boxctl-image convert <ref> [-images dir] [-name name] [-out path] [-size-mib n] [-no-service] [-from-tar tar | -tar-only tar]
@@ -51,6 +52,8 @@ func main() {
 	switch os.Args[1] {
 	case "validate":
 		err = runValidate(os.Args[2:])
+	case "list":
+		err = runList(os.Args[2:])
 	case "matrix":
 		err = runMatrix(os.Args[2:])
 	case "build":
@@ -80,6 +83,28 @@ func runValidate(args []string) error {
 		return err
 	}
 	fmt.Printf("%d images OK\n", len(defs))
+	return nil
+}
+
+func runList(args []string) error {
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	imagesDir := fs.String("images", "images", "directory of image definitions")
+	_ = fs.Parse(args)
+
+	defs, err := imagecatalog.LoadDefinitions(*imagesDir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%-20s | %-20s | %-10s | %-10s | %s\n", "NAME", "LABEL", "PROVIDER", "STATUS", "DESCRIPTION")
+	fmt.Println(strings.Repeat("-", 100))
+	for _, d := range defs {
+		desc := d.Description
+		if len(desc) > 50 {
+			desc = desc[:47] + "..."
+		}
+		fmt.Printf("%-20s | %-20s | %-10s | %-10s | %s\n", d.Name, d.Label, d.Provider, d.Status, desc)
+	}
 	return nil
 }
 
