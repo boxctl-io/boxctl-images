@@ -48,18 +48,23 @@ with a `go.mod`; a language image is named `claude-agent-<lang>` so the
 CLI's image picker finds it) and `openai-agents` (`FROM debian-slim`,
 plus Node.js, the Codex CLI and the `codex-set-key`/`codex-connect`
 helpers -- the self-hosted environment of an OpenAI Agents API session)
-so far -- or, until it moves over, by `scripts/images/bake-<name>-image.sh`
+and `alpine` (Alpine with OpenRC and sshd, about 30 MB of files in a
+512 MiB ext4: the smallest image, for trying out a host or an `onctl
+create -p fc` setup; `hidden`, so booted by name only) so far -- or, until it moves over, by `scripts/images/bake-<name>-image.sh`
 (`desktop`, `vscode`, the kernel). `boxctl-image build <name>` does
 either. For a Dockerfile it runs `docker buildx bake` (from a bake file it
 generates from the Dockerfiles' `FROM`/`--from` references), exports the
 filesystem as a tar, unpacks it, fixes up what Docker manages during a
 build (`/etc/hostname`, `/etc/hosts`, `/etc/resolv.conf`,
 `/etc/machine-id`, `/.dockerenv`, Docker's apt tweaks), checks the tree
-boots as a box (systemd init, sshd enabled, no baked SSH host keys), and
+boots as a box (systemd init, or busybox init with OpenRC; sshd enabled;
+no baked SSH host keys), and
 makes a `size_mib` ext4 from it with `mkfs.ext4 -d` -- no loop mount, no
 chroot. Every Dockerfile starts with `images/common/install.sh`: the
 packages and units every box needs, including generating SSH host keys on
-each box's first boot rather than baking one set into the image. Base
+each box's first boot rather than baking one set into the image
+(`alpine`, which is neither apt-based nor systemd, has an `install.sh` of
+its own that does the same with OpenRC). Base
 images are pinned by digest, and Dependabot bumps them.
 
 `build-fc-images.yml` reads `images/` rather than a list of its own. A

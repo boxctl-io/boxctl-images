@@ -429,23 +429,36 @@ func fixupRootfs(root, name string) error {
 func checkRootfs(root string) error {
 	var problems []string
 
-	if init, err := resolveIn(root, "/sbin/init"); err != nil {
+	// sshd is enabled wherever the init the kernel starts looks: systemd's
+	// wants links, or -- busybox init, which is Alpine and runs OpenRC from
+	// /etc/inittab (images/alpine) -- OpenRC's default runlevel.
+	var sshd []string
+	switch init, err := resolveIn(root, "/sbin/init"); {
+	case err != nil:
 		problems = append(problems, "no /sbin/init: "+err.Error())
-	} else if filepath.Base(init) != "systemd" {
-		problems = append(problems, "/sbin/init is "+init+", not systemd")
-	}
-
-	enabled := false
-	for _, unit := range []string{
-		"etc/systemd/system/multi-user.target.wants/ssh.service",
-		"etc/systemd/system/sockets.target.wants/ssh.socket",
-	} {
-		if _, err := os.Lstat(filepath.Join(root, unit)); err == nil {
-			enabled = true
+	case filepath.Base(init) == "systemd":
+		sshd = []string{
+			"etc/systemd/system/multi-user.target.wants/ssh.service",
+			"etc/systemd/system/sockets.target.wants/ssh.socket",
 		}
+	case filepath.Base(init) == "busybox":
+		sshd = []string{"etc/runlevels/default/sshd"}
+		if _, err := os.Stat(filepath.Join(root, "etc/inittab")); err != nil {
+			problems = append(problems, "/sbin/init is busybox, with no /etc/inittab to tell it what to start")
+		}
+	default:
+		problems = append(problems, "/sbin/init is "+init+", neither systemd nor busybox")
 	}
-	if !enabled {
-		problems = append(problems, "sshd isn't enabled")
+	if sshd != nil {
+		enabled := false
+		for _, unit := range sshd {
+			if _, err := os.Lstat(filepath.Join(root, unit)); err == nil {
+				enabled = true
+			}
+		}
+		if !enabled {
+			problems = append(problems, "sshd isn't enabled")
+		}
 	}
 
 	if keys, _ := filepath.Glob(filepath.Join(root, "etc/ssh/ssh_host_*")); len(keys) > 0 {

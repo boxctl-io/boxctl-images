@@ -47,8 +47,8 @@ func TestPlanMatrix(t *testing.T) {
 		changed []string
 		want    string
 	}{
-		"everything":                           {nil, "claude-agent:true,claude-agent-go:true,debian-slim:true,desktop:true,openai-agents:true,ubuntu-26.04:true,vscode:true"},
-		"workflow":                             {[]string{workflowFile}, "claude-agent:true,claude-agent-go:true,debian-slim:true,desktop:true,openai-agents:true,ubuntu-26.04:true,vscode:true"},
+		"everything":                           {nil, "alpine:true,claude-agent:true,claude-agent-go:true,debian-slim:true,desktop:true,openai-agents:true,ubuntu-26.04:true,vscode:true"},
+		"workflow":                             {[]string{workflowFile}, "alpine:true,claude-agent:true,claude-agent-go:true,debian-slim:true,desktop:true,openai-agents:true,ubuntu-26.04:true,vscode:true"},
 		"one bake script":                      {[]string{"scripts/images/bake-desktop-image.sh"}, "desktop:true"},
 		"one definition":                       {[]string{"images/vscode/image.json"}, "vscode:false"},
 		"both":                                 {[]string{"images/vscode/image.json", "scripts/images/bake-vscode-image.sh"}, "vscode:true"},
@@ -56,8 +56,8 @@ func TestPlanMatrix(t *testing.T) {
 		"unrelated":                            {[]string{"README.md"}, ""},
 		"a Dockerfile, and what is FROM it":    {[]string{"images/debian-slim/Dockerfile"}, "claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true"},
 		"only the image FROM another":          {[]string{"images/claude-agent/Dockerfile"}, "claude-agent:true,claude-agent-go:true"},
-		"the builder":                          {[]string{"cmd/boxctl-image/build.go"}, "claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true,ubuntu-26.04:true"},
-		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true,ubuntu-26.04:true"},
+		"the builder":                          {[]string{"cmd/boxctl-image/build.go"}, "alpine:true,claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true,ubuntu-26.04:true"},
+		"the shared rootfs layer":              {[]string{"images/common/install.sh"}, "alpine:true,claude-agent:true,claude-agent-go:true,debian-slim:true,openai-agents:true,ubuntu-26.04:true"},
 		"a Dockerfile image's definition only": {[]string{"images/ubuntu-26.04/image.json"}, "ubuntu-26.04:false"},
 		"nothing changed at all":               {[]string{}, ""},
 		"an external image isn't built":        {[]string{"images/windows-server-2025/image.json"}, ""},
