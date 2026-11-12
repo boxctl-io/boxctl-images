@@ -31,11 +31,12 @@ domain. CI publishes the public images to it **as well as** to
 https://images.boxctl.io/catalog/<name>.json             the manifest
 https://images.boxctl.io/images/<file>-<sha7>.zst        one generation
 https://images.boxctl.io/images/latest/<file>.zst        the current one, by name
+https://images.boxctl.io/kernel/...                      the kernel, laid out the same way
 ```
 
 ```bash
 curl -fsSL https://images.boxctl.io/images/latest/debian-slim.ext4.zst | zstd -d -o debian-slim.ext4
-curl -fsSL https://images.boxctl.io/images/latest/boxctl-kernel.vmlinux.zst | zstd -d -o vmlinux
+curl -fsSL https://images.boxctl.io/kernel/latest/boxctl-kernel.vmlinux.zst | zstd -d -o vmlinux
 sudo onctl create -n box -p fc --rootfs-image $PWD/debian-slim.ext4 --kernel-image $PWD/vmlinux
 ```
 
@@ -93,8 +94,9 @@ that happens.
   `PUBLIC_IMAGES_SECRET_ACCESS_KEY` secrets (the endpoint is the
   account's, `CF_S3_ENDPOINT`, as now). `boxctl-image` needs no change:
   it already reads `CF_BUCKET`.
-- README: the download commands above, and that a manifest's sha256 is
-  what to check a download against.
+- README, once step 3 of the rollout has passed: the download commands
+  above, and that a manifest's sha256 is what to check a download
+  against.
 
 ## Rollout
 
