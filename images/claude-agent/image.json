@@ -4,7 +4,7 @@
   "provider": "fc",
   "source": "baked",
   "label": "Claude Agent",
-  "description": "Debian Slim plus git, gh, rsync, jq, ripgrep, make, tmux and python3, Claude Code itself, and what a run needs to show its result: Playwright with headless Chromium, asciinema and agg.",
+  "description": "Debian Slim plus git, gh, rsync, jq, ripgrep, make and tmux (or herdr), plus Claude Code itself -- what a coding agent needs, ready on its first command.",
   "os": "debian",
   "features": [],
   "size_mib": 4096,
