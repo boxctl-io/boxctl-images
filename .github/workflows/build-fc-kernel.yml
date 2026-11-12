@@ -74,3 +74,14 @@ jobs:
         # Uploads it by sha and writes catalog/boxctl-kernel.json -- see
         # docs/plans/image-catalog.md.
         run: sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" publish boxctl-kernel -git-sha "$GITHUB_SHA"
+
+      - name: Publish kernel to the public bucket
+        # The public images (docs/plans/public-images.md) don't boot
+        # without it. Off until PUBLIC_IMAGES_BUCKET is set.
+        if: vars.PUBLIC_IMAGES_BUCKET != ''
+        env:
+          CF_BUCKET: ${{ vars.PUBLIC_IMAGES_BUCKET }}
+          CF_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_ACCESS_KEY }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_SECRET_ACCESS_KEY }}
+          CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
+        run: sudo --preserve-env=CF_BUCKET,CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" publish boxctl-kernel -git-sha "$GITHUB_SHA"

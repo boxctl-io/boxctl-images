@@ -161,3 +161,23 @@ jobs:
           [ "${{ matrix.rebuild }}" = true ] || args+=(-metadata-only)
           # sudo: the baked image and its sidecar are root's.
           sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" "${args[@]}"
+
+      - name: Publish ${{ matrix.image }} to the public bucket
+        # The Dockerfile-built images are also published to a bucket anyone
+        # can download from (docs/plans/public-images.md) -- the same
+        # publish, to another bucket, so the server's own keeps every
+        # image. Not the bake-script ones (desktop, vscode), which haven't
+        # been reviewed for it. Off until PUBLIC_IMAGES_BUCKET is set. The
+        # first publish of an image there has to be a rebuild: a
+        # manifest-only one has no generation to describe.
+        if: vars.PUBLIC_IMAGES_BUCKET != '' && hashFiles(format('images/{0}/Dockerfile', matrix.image)) != ''
+        env:
+          CF_BUCKET: ${{ vars.PUBLIC_IMAGES_BUCKET }}
+          CF_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_ACCESS_KEY }}
+          CF_SECRET_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_SECRET_ACCESS_KEY }}
+          CF_S3_ENDPOINT: ${{ secrets.CF_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          args=(publish "${{ matrix.image }}" -git-sha "$GITHUB_SHA")
+          [ "${{ matrix.rebuild }}" = true ] || args+=(-metadata-only)
+          sudo --preserve-env=CF_BUCKET,CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" "${args[@]}"
