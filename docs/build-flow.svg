@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" width="860" height="300" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">From a Dockerfile to a published image</title>
+  <desc id="d">An image directory with a Dockerfile and image.json is built with docker buildx bake into a filesystem tar, fixed up and checked, made into an ext4 with mkfs.ext4, compressed and published to a private bucket that boxctl hosts sync from and to images.boxctl.io for public download.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect width="860" height="300" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+
+  <text x="24" y="34" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.6">BUILD — boxctl-image build</text>
+  <g font-size="13" fill="#1f2328">
+    <g>
+      <rect x="24" y="48" width="148" height="72" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="98" y="76" text-anchor="middle" font-weight="600">images/&lt;name&gt;/</text>
+      <text x="98" y="96" text-anchor="middle" font-size="12" fill="#57606a">Dockerfile</text>
+      <text x="98" y="112" text-anchor="middle" font-size="12" fill="#57606a">image.json</text>
+    </g>
+    <g>
+      <rect x="196" y="48" width="148" height="72" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="270" y="76" text-anchor="middle" font-weight="600">docker buildx bake</text>
+      <text x="270" y="98" text-anchor="middle" font-size="12" fill="#57606a">filesystem as a tar</text>
+    </g>
+    <g>
+      <rect x="368" y="48" width="148" height="72" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="442" y="76" text-anchor="middle" font-weight="600">fix up + check</text>
+      <text x="442" y="96" text-anchor="middle" font-size="12" fill="#57606a">init, sshd enabled,</text>
+      <text x="442" y="112" text-anchor="middle" font-size="12" fill="#57606a">no baked host keys</text>
+    </g>
+    <g>
+      <rect x="540" y="48" width="148" height="72" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="614" y="76" text-anchor="middle" font-weight="600">mkfs.ext4 -d</text>
+      <text x="614" y="98" text-anchor="middle" font-size="12" fill="#57606a">&lt;name&gt;.ext4</text>
+    </g>
+    <g>
+      <rect x="712" y="48" width="124" height="72" rx="8" fill="#ddf4ff" stroke="#54aeff"/>
+      <text x="774" y="76" text-anchor="middle" font-weight="600">publish</text>
+      <text x="774" y="96" text-anchor="middle" font-size="12" fill="#57606a">zstd, named by</text>
+      <text x="774" y="112" text-anchor="middle" font-size="12" fill="#57606a">sha256 + manifest</text>
+    </g>
+  </g>
+  <g stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#a)">
+    <path d="M172 84H194"/>
+    <path d="M344 84H366"/>
+    <path d="M516 84H538"/>
+    <path d="M688 84H710"/>
+    <path d="M774 120V150H270V186"/>
+    <path d="M774 150V186"/>
+  </g>
+
+  <text x="24" y="178" font-size="12" font-weight="600" fill="#57606a" letter-spacing="0.6">PUBLISHED TO</text>
+  <g font-size="13" fill="#1f2328">
+    <rect x="24" y="188" width="492" height="88" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="40" y="214" font-weight="600">Private bucket — every image</text>
+    <text x="40" y="236" font-size="12" fill="#57606a">The boxctl server reads the manifests and syncs each image</text>
+    <text x="40" y="254" font-size="12" fill="#57606a">onto the Firecracker hosts that lack it.</text>
+
+    <rect x="540" y="188" width="296" height="88" rx="8" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="556" y="214" font-weight="600">images.boxctl.io — public</text>
+    <text x="556" y="236" font-size="12" fill="#57606a">Dockerfile images and the kernel.</text>
+    <text x="556" y="254" font-size="12" fill="#57606a">curl | zstd -d, then onctl create -p fc</text>
+  </g>
+</svg>
