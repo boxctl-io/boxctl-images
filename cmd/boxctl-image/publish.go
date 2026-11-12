@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ type store interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Put(ctx context.Context, key string, body io.ReadSeeker, size int64, contentType string, metadata map[string]string) error
 	Copy(ctx context.Context, src, dst string, metadata map[string]string) error
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 // maxObjectBytes is the most one PUT can upload (S3's and R2's
@@ -106,7 +108,33 @@ func (p *publisher) publish(ctx context.Context, req publishRequest) (imagecatal
 	if err := p.store.Put(ctx, key, strings.NewReader(string(data)), int64(len(data)), "application/json", nil); err != nil {
 		return imagecatalog.Manifest{}, err
 	}
-	return m, nil
+	return m, p.writeIndex(ctx)
+}
+
+// writeIndex rewrites the bucket's index from the manifests in it, so it
+// can't name an image that isn't there. Two images published at the same
+// moment can each miss the other's brand-new manifest; whichever publish
+// comes next puts that right, and only an image's first publish is
+// exposed to it.
+func (p *publisher) writeIndex(ctx context.Context) error {
+	keys, err := p.store.List(ctx, imagecatalog.ManifestPrefix)
+	if err != nil {
+		return err
+	}
+	idx := imagecatalog.Index{Schema: imagecatalog.SchemaVersion, Images: []string{}}
+	for _, k := range keys {
+		name, ok := strings.CutSuffix(strings.TrimPrefix(k, imagecatalog.ManifestPrefix), ".json")
+		if ok && imagecatalog.ValidName(name) {
+			idx.Images = append(idx.Images, name)
+		}
+	}
+	sort.Strings(idx.Images)
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return p.store.Put(ctx, imagecatalog.IndexKey, strings.NewReader(string(data)), int64(len(data)), "application/json", nil)
 }
 
 // currentManifest returns the published manifest for name, or nil if

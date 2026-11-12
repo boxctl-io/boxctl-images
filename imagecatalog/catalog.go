@@ -238,6 +238,20 @@ func LatestKey(d Definition) string {
 	return objectPrefix(d) + "latest/" + path.Base(HostPath(d)) + ".zst"
 }
 
+// IndexKey is the list of what a bucket has manifests for. Whoever holds a
+// key to the bucket can list ManifestPrefix instead; a reader of the
+// public bucket (docs/plans/public-images.md) can't list anything, and
+// this is how it finds out which names to ask for. Deliberately not under
+// ManifestPrefix, where everything is a manifest.
+const IndexKey = "index.json"
+
+// Index is IndexKey's content.
+type Index struct {
+	Schema int `json:"schema"`
+	// Images are the names with a manifest at ManifestKey(name), sorted.
+	Images []string `json:"images"`
+}
+
 // ManifestKey is where d's manifest lives in the images bucket.
 func ManifestKey(name string) string {
 	return ManifestPrefix + name + ".json"

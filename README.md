@@ -29,7 +29,9 @@ sudo onctl create -n box -p fc --rootfs-image $PWD/alpine.ext4 --kernel-image $P
 ```
 
 `https://images.boxctl.io/catalog/<name>.json` is an image's manifest: the
-sha256 a download must unpack to, its size, and earlier builds.
+sha256 a download must unpack to, its size, and earlier builds;
+[`index.json`](https://images.boxctl.io/index.json) lists the names, and
+`onctl images -p fc` prints them.
 `claude-agent` and `claude-agent-go` are also container images, at
 `ghcr.io/boxctl-io/claude-agent` and `ghcr.io/boxctl-io/claude-agent-go`.
 
