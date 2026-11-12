@@ -1,0 +1,13 @@
+{
+  "name": "alpine",
+  "kind": "rootfs",
+  "provider": "fc",
+  "source": "baked",
+  "label": "Alpine",
+  "description": "Alpine Linux with OpenRC and sshd, about 30 MB of files -- the smallest box there is, for trying out a host or a Firecracker setup. musl and busybox, not glibc and systemd.",
+  "os": "alpine",
+  "features": [],
+  "size_mib": 512,
+  "status": "hidden",
+  "default": false
+}

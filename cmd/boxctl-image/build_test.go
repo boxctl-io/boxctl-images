@@ -191,6 +191,40 @@ func TestFixupAndCheckRootfs(t *testing.T) {
 	}
 }
 
+// TestCheckRootfsAcceptsOpenRC: the alpine image boots busybox init and
+// OpenRC rather than systemd, and is as bootable as the others -- as long
+// as sshd is in the runlevel its inittab starts.
+func TestCheckRootfsAcceptsOpenRC(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"bin/busybox":   "",
+		"etc/inittab":   "::wait:/sbin/openrc default\n",
+		"etc/hosts":     "",
+		"root/.profile": "",
+	})
+	link := func(target, at string) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, at)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(root, at)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link("/bin/busybox", "sbin/init")
+	link("/etc/init.d/sshd", "etc/runlevels/default/sshd")
+	if err := fixupRootfs(root, "alpine"); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkRootfs(root); err != nil {
+		t.Fatalf("an OpenRC rootfs with sshd enabled failed its check: %v", err)
+	}
+	if err := os.Remove(filepath.Join(root, "etc/inittab")); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkRootfs(root); err == nil {
+		t.Error("busybox init with no inittab passed the check")
+	}
+}
+
 func TestCheckRootfsRejects(t *testing.T) {
 	cases := map[string]func(root string) error{
 		"baked host keys": func(root string) error {
@@ -202,12 +236,30 @@ func TestCheckRootfsRejects(t *testing.T) {
 		"sshd not enabled": func(root string) error {
 			return os.Remove(filepath.Join(root, "etc/systemd/system/multi-user.target.wants/ssh.service"))
 		},
-		"init isn't systemd": func(root string) error {
+		"init is neither systemd nor busybox": func(root string) error {
 			p := filepath.Join(root, "usr/sbin/init")
 			if err := os.Remove(p); err != nil {
 				return err
 			}
-			return os.Symlink("/bin/busybox", p)
+			if err := os.WriteFile(filepath.Join(root, "usr/sbin/runit"), nil, 0o755); err != nil {
+				return err
+			}
+			return os.Symlink("/usr/sbin/runit", p)
+		},
+		// systemd's sshd link is still there, and must not count: busybox
+		// init starts what OpenRC's runlevels say, and nothing else.
+		"busybox init without sshd in an OpenRC runlevel": func(root string) error {
+			p := filepath.Join(root, "usr/sbin/init")
+			if err := os.Remove(p); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(root, "usr/sbin/busybox"), nil, 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(root, "etc/inittab"), nil, 0o644); err != nil {
+				return err
+			}
+			return os.Symlink("/usr/sbin/busybox", p)
 		},
 		"hostname is a link": func(root string) error {
 			p := filepath.Join(root, "etc/hostname")
