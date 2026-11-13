@@ -44,8 +44,8 @@ it.
 An image is built from `images/<name>/Dockerfile`
 ([`docs/plans/dockerfile-rootfs.md`](plans/dockerfile-rootfs.md)) --
 `debian-slim`, `ubuntu-26.04`, `claude-agent` (`FROM debian-slim`,
-plus git, rsync, jq, ripgrep, make, gh, tmux, python3 and Claude Code for
-coding agents such as boxctl's Claude Code plugin, the box side of `boxctl
+plus git, rsync, jq, ripgrep, make, gh, tmux (or herdr), python3 and Claude
+Code for coding agents such as boxctl's Claude Code plugin, the box side of `boxctl
 claude`'s GitHub credential forwarding, and what an unattended run uses to
 show its result: Playwright with headless Chromium, asciinema and agg), `claude-agent-go` (`FROM
 claude-agent`, plus Go and gcc -- what `boxctl claude` picks for a project
@@ -121,8 +121,8 @@ generates and stops. `publish-oci-images.yml` uses it to build
 `claude-agent` for `linux/amd64` and `linux/arm64` and push it to
 `ghcr.io/boxctl-io/claude-agent` -- the same Dockerfile as the box image,
 as a container image for runtimes that take one (onctl's `ac` provider
-runs it as an Apple container, with sshd, tmux, git, gh and Claude Code
-ready instead of installed on every new sandbox).
+runs it as an Apple container, with sshd, tmux (or herdr), git, gh and
+Claude Code ready instead of installed on every new sandbox).
 
 **Converting a container image:** `boxctl-image convert <ref>` makes a
 box image out of any image Docker can pull -- Docker Hub, GHCR, ECR,
