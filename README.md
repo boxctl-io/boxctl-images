@@ -63,3 +63,14 @@ Everything else -- image statuses, converting a container image, the
 kernel, the images built by bake scripts, CI and its secrets -- is in
 [docs/reference.md](docs/reference.md); the designs are in
 [docs/plans](docs/plans).
+
+## License
+
+The contents of this repository -- the image recipes and the
+`boxctl-image` tool -- are licensed under the
+[Apache License 2.0](LICENSE). Copyright 2026 Crash Code B.V.
+
+That covers the recipes, not what they install. A built image contains
+other people's software (Debian or Ubuntu packages, the Linux kernel,
+Node.js, Claude Code, the Codex CLI and so on), each under its own
+license.
