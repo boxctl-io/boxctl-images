@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
 )
 
 // Store presigns PUT/GET URLs for one bucket and can delete objects in
@@ -99,6 +100,8 @@ func Open(cfg Config) (*Store, error) {
 		// SigV4's payload hash.
 		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
+		// A proxy in front of the store may rewrite these; see unsigned.go.
+		APIOptions: []func(*middleware.Stack) error{signWithoutHeaders},
 	})
 
 	return &Store{
