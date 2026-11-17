@@ -43,7 +43,14 @@
 # Build time: ~10-15 min on 12 cores.
 set -euo pipefail
 
-KERNEL_SERIES="${KERNEL_SERIES:-6.1}"
+# 6.18, not 6.1: 6.1.191 and 6.1.192 backported ext4 block-allocator
+# patches that test __filemap_get_folio() with IS_ERR() only, but 6.1's
+# returns NULL for a page not in the cache. Once memory pressure evicts a
+# bitmap page, the next allocation dereferences NULL in
+# ext4_mb_load_buddy_gfp and the box panics (Debian #1154151). 6.18 is
+# also the guest line Firecracker supports longest (to 2028; 6.1's minimum
+# ended 2026-09-02), and needs Firecracker v1.16.1 on the host.
+KERNEL_SERIES="${KERNEL_SERIES:-6.18}"
 OUTPUT_DIR="${OUTPUT_DIR:-/opt/fc/images}"
 OUTPUT="$OUTPUT_DIR/boxctl-kernel.vmlinux"
 BUILD_DIR=$(mktemp -d /tmp/boxctl-kernel-build.XXXXXX)
@@ -94,9 +101,10 @@ K8S_SYMBOLS="NETFILTER_XT_MATCH_STATISTIC NETFILTER_XT_MATCH_ADDRTYPE NETFILTER_
   NFT_NUMGEN NFT_FIB NFT_FIB_IPV4 NFT_FIB_IPV6 NFT_FIB_INET NFT_CT NFT_NAT NFT_MASQ NFT_REJECT
   IP_SET IP_SET_HASH_IP IP_SET_HASH_IPPORT IP_SET_HASH_IPPORTIP IP_SET_HASH_IPPORTNET IP_SET_HASH_NET
   NETFILTER_XT_SET NETFILTER_XT_MATCH_PHYSDEV NETFILTER_XT_MATCH_LIMIT NETFILTER_XT_TARGET_NFLOG
-  NETFILTER_NETLINK_LOG
-  # Calico:
-  NETFILTER_XT_TARGET_CT NETFILTER_XT_TARGET_NOTRACK IP_NF_MATCH_RPFILTER IP6_NF_MATCH_RPFILTER"
+  NETFILTER_NETLINK_LOG"
+# Calico. Its own list: a "# comment" line inside the quoted list above
+# would be read as two more symbols, "#" and "Calico:".
+CALICO_SYMBOLS="NETFILTER_XT_TARGET_CT NETFILTER_XT_TARGET_NOTRACK IP_NF_MATCH_RPFILTER IP6_NF_MATCH_RPFILTER"
 
 # virtio-vsock, the guest end of a box's run-status channel
 # (docs/plans/run-status.md). Built in upstream; asserted so a future base
@@ -104,14 +112,14 @@ K8S_SYMBOLS="NETFILTER_XT_MATCH_STATISTIC NETFILTER_XT_MATCH_ADDRTYPE NETFILTER_
 VSOCK_SYMBOLS="VSOCKETS VIRTIO_VSOCKETS"
 
 say "enabling base + Kubernetes netfilter + vsock symbols"
-for sym in $BASE_SYMBOLS $K8S_SYMBOLS $VSOCK_SYMBOLS; do
+for sym in $BASE_SYMBOLS $K8S_SYMBOLS $CALICO_SYMBOLS $VSOCK_SYMBOLS; do
   ./scripts/config --enable "$sym"
 done
 make olddefconfig
 
 say "verifying every symbol landed as built-in (not =m)"
 failed=0
-for sym in $BASE_SYMBOLS $K8S_SYMBOLS $VSOCK_SYMBOLS; do
+for sym in $BASE_SYMBOLS $K8S_SYMBOLS $CALICO_SYMBOLS $VSOCK_SYMBOLS; do
   val=$(./scripts/config --state "$sym")
   if [ "$val" != "y" ]; then
     echo "ERROR: CONFIG_${sym}=${val} (expected y) -- boxes have no /lib/modules, so =m is as good as =n" >&2
