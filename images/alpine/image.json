@@ -8,6 +8,6 @@
   "os": "alpine",
   "features": [],
   "size_mib": 512,
-  "status": "hidden",
+  "status": "available",
   "default": false
 }
