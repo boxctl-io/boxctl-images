@@ -315,12 +315,12 @@ func TestBuildRunsTheBakeScriptForImagesWithoutADockerfile(t *testing.T) {
 		return nil
 	}}
 	err := b.build(buildRequest{
-		def: find(t, "desktop"), imagesDir: "../../images", scriptsDir: "../../scripts/images", out: filepath.Join(t.TempDir(), "x"),
+		def: find(t, "vscode"), imagesDir: "../../images", scriptsDir: "../../scripts/images", out: filepath.Join(t.TempDir(), "x"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ran) != 1 || ran[0][0] != "bash" || ran[0][1] != "../../scripts/images/bake-desktop-image.sh" {
+	if len(ran) != 1 || ran[0][0] != "bash" || ran[0][1] != "../../scripts/images/bake-vscode-image.sh" {
 		t.Fatalf("ran %v", ran)
 	}
 }
@@ -384,7 +384,7 @@ func TestBuildWritesOnlyTheBakeFile(t *testing.T) {
 		t.Errorf("debian-slim contexts %v", c)
 	}
 
-	if err := b.build(buildRequest{def: find(t, "desktop"), imagesDir: "../../images", bakeOnly: bake}); err == nil {
+	if err := b.build(buildRequest{def: find(t, "vscode"), imagesDir: "../../images", bakeOnly: bake}); err == nil {
 		t.Fatal("an image without a Dockerfile has no bake file to write")
 	}
 }
