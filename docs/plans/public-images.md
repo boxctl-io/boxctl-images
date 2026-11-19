@@ -1,8 +1,12 @@
 # Public image downloads
 
-Status: proposal. Decided so far: the domain is `images.boxctl.io`, and
-only the Dockerfile-built images (and the kernel) are public to begin
-with.
+> **Status:** shipped. The bucket, the `images.boxctl.io` domain, and the
+> second publish in `build-fc-images.yml` and `build-fc-kernel.yml` are
+> in place. `index.json` at the bucket root lists the names (not
+> `catalog/index.json`: everything under `catalog/` is a manifest).
+> `alpine` is `available` (#24). Still not public: `desktop`, `vscode`,
+> and the agent bundle. onctl resolving an image by name stays out of
+> scope, in onctl.
 
 ## The problem
 
@@ -94,20 +98,20 @@ that happens.
   `PUBLIC_IMAGES_SECRET_ACCESS_KEY` secrets (the endpoint is the
   account's, `CF_S3_ENDPOINT`, as now). `boxctl-image` needs no change:
   it already reads `CF_BUCKET`.
-- README, once step 3 of the rollout has passed: the download commands
-  above, and that a manifest's sha256 is what to check a download
-  against.
+- README: the download commands above, and that a manifest's sha256 is
+  what to check a download against. Done.
 
 ## Rollout
 
-1. Create the bucket, domain and token; set the variable and the two
-   secrets.
-2. Run `build-fc-images` for `all` and `build-fc-kernel` once. A first
-   publish to the public bucket has to be a full one -- a manifest-only
-   republish of an image the bucket has never held fails, by design
-   (`imagecatalog.Advance`).
-3. Download `alpine` and the kernel from `images.boxctl.io` and boot
-   them with onctl on a host.
+Done. The bucket, domain, token, variable and secrets are set, and both
+workflows have published. `index.json` lists `alpine`, `boxctl-kernel`,
+`claude-agent`, `claude-agent-go`, `debian-slim`, `openai-agents` and
+`ubuntu-26.04`, and the `latest` objects for `alpine` and the kernel
+answer on `images.boxctl.io`.
+
+A first publish of an image to the public bucket still has to be a full
+one. A manifest-only republish of an image the bucket has never held
+fails, by design (`imagecatalog.Advance`).
 
 Rollback is deleting the `PUBLIC_IMAGES_BUCKET` variable, and the bucket
 if the images should stop being reachable.
@@ -116,25 +120,23 @@ if the images should stop being reachable.
 
 - **`hidden` and `retired` stop meaning unreachable** for public images.
   They still mean "not offered" and "not bootable" on boxctl, but anyone
-  can download the objects. `alpine` is hidden today and is exactly the
-  image an outside reader wants.
+  can download the objects. `alpine` shipped `hidden`, which is how an
+  outside reader got it before the dashboard listed it; it is
+  `available` now (#24).
 - **Third-party software in the images** (Claude Code, the Codex CLI,
   Chromium) is already distributed publicly in the ghcr images or by its
-  vendor's installer; check each one's terms allow redistribution in an
-  image before step 2.
+  vendor's installer. Those images are on `images.boxctl.io`. `desktop`
+  and `vscode` stay off it until their own review.
 - **Cost.** R2 doesn't charge for egress, only per request, and the
   custom domain puts Cloudflare's cache in front. Sha-named objects
   never change and can be cached forever; `images/latest/*` and
   `catalog/*` need a short TTL.
 - **Integrity.** The write token is CI-only, and a manifest's sha256 is
-  the check on a download; the README should say to use it.
+  the check on a download. The README says to use it.
 
 ## Not in this plan
 
 - onctl fetching an image by name (`--rootfs-image debian-slim`
   resolving through the public catalog). The natural next step, and a
-  change in onctl, once the URLs exist.
-- `catalog/index.json`, a list of what is published (a public reader
-  can't list the bucket). Worth adding with the first consumer that
-  needs to discover images rather than name them.
+  change in onctl. The URLs exist.
 - `desktop` and `vscode`, and the agent bundle.
