@@ -1,9 +1,11 @@
 # Building box images from Dockerfiles
 
-> **Status:** `debian-slim` and `ubuntu-26.04` are built this way;
-> `desktop` and `vscode` still use their bake scripts. The layout and
-> pipeline below describe what's built (`cmd/boxctl-image/build.go`),
-> not the first draft of this plan.
+> **Status:** `debian-slim` and `ubuntu-26.04` are built this way.
+> `desktop` is a Dockerfile too (its bake script is gone); the parity
+> boot on aimax is still the check that it replaced the old image.
+> `vscode` still uses its bake script. The layout and pipeline below
+> describe what's built (`cmd/boxctl-image/build.go`), not the first
+> draft of this plan.
 
 Companion to `image-catalog.md`. That plan has two halves: the
 **catalog** (what images exist, published as manifests the server reads)
@@ -67,7 +69,7 @@ images/
   debian-slim/image.json     catalog fields + size_mib
   debian-slim/Dockerfile     FROM debian:trixie-slim@sha256:... + common/install.sh
   ubuntu-26.04/Dockerfile    FROM ubuntu:26.04@sha256:...      + common/install.sh
-  desktop/Dockerfile         (next) FROM ubuntu:24.04@... + install.sh + XFCE/TigerVNC/Firefox
+  desktop/Dockerfile         FROM ubuntu:24.04@... + install.sh + XFCE/TigerVNC/Firefox
   vscode/Dockerfile          (next) FROM desktop + VS Code + Python + desktop user
 ```
 
@@ -240,6 +242,7 @@ each need their own design:
 
 The catalog shipped first (#117, #118) on the bake scripts; this plan
 swaps builders behind the same `publish`, image by image. Done:
-`debian-slim`, `ubuntu-26.04`. Next: `desktop`, then `vscode`
-(`FROM desktop`, with its non-root desktop user) -- each deleting its
-`bake-<name>-image.sh` once its Docker-built image boots on aimax.
+`debian-slim`, `ubuntu-26.04`. `desktop`'s Dockerfile replaces
+`bake-desktop-image.sh`; boot that image on aimax before calling the
+switch finished. Next: `vscode` (`FROM desktop`, with its non-root
+desktop user), deleting its bake script once that image boots too.

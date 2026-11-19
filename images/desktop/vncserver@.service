@@ -1,0 +1,17 @@
+[Unit]
+Description=TigerVNC server on display %i
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+# -localhost no is required. The wrapper defaults to localhost-only even
+# when the flag is omitted, and the tunnel dials this box's address.
+# -SecurityTypes None matches that: the tunnel is the access control.
+ExecStart=/usr/bin/vncserver -fg -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE :%i
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

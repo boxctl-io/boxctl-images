@@ -55,8 +55,9 @@ plus Node.js, the Codex CLI and the `codex-set-key`/`codex-connect`
 helpers -- the self-hosted environment of an OpenAI Agents API session)
 and `alpine` (Alpine with OpenRC and sshd, about 30 MB of files in a
 512 MiB ext4: the smallest image, for trying out a host or an `onctl
-create -p fc` setup; `hidden`, so booted by name only) so far -- or, until it moves over, by `scripts/images/bake-<name>-image.sh`
-(`desktop`, `vscode`, the kernel). `boxctl-image build <name>` does
+create -p fc` setup) and `desktop` (Ubuntu 24.04 with XFCE, TigerVNC
+and Firefox, 8000 MiB) so far -- or, until it moves over, by `scripts/images/bake-<name>-image.sh`
+(`vscode`, the kernel). `boxctl-image build <name>` does
 either. For a Dockerfile it runs `docker buildx bake` (from a bake file it
 generates from the Dockerfiles' `FROM`/`--from` references), exports the
 filesystem as a tar, unpacks it, fixes up what Docker manages during a
