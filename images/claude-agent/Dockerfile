@@ -68,10 +68,16 @@ RUN apt-get update \
  && agg --version && python3 --version && LC_ALL=C.UTF-8 asciinema --version \
  && node -e 'require("/root/node_modules/playwright").chromium.launch().then(b => b.close())'
 
-# Claude Code, in /root/.local/bin -- where boxctl claude puts /root/.local/bin
-# on PATH. Not on the image's own PATH: only boxctl's sessions need it.
+# Claude Code, in /root/.local/bin, which root's interactive shells have
+# on PATH (/root/.bashrc): a shell in a box's herdr or tmux pane is where
+# you pick up a run by hand (`claude --resume <id>`). Not on the image's
+# own PATH -- a non-interactive command doesn't need it, and boxctl
+# claude's sessions set it themselves. boxctl claude adds the same line
+# to an older box's .bashrc if it isn't there (boxctl-cli's
+# boxAgent.setupScript), so keep it word for word.
 RUN curl -fsSL https://claude.ai/install.sh | bash \
- && /root/.local/bin/claude --version
+ && /root/.local/bin/claude --version \
+ && echo 'export PATH="$HOME/.local/bin:$PATH"' >>/root/.bashrc
 
 # GitHub credentials forwarded from the attached machine
 # (git-credential-boxctl, gh). git asks the helper for github.com over

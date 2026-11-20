@@ -14,7 +14,8 @@
 # static binary from its GitHub release, pinned with its sha256 per
 # architecture so a build is reproducible. Bumping HERDR_VERSION (and both
 # sums, from the release's assets) is a change to this file, which is what
-# makes build-fc-images.yml rebuild.
+# makes build-fc-images.yml rebuild. Its config turns the first-run
+# screen off (below).
 # e2fsprogs is for resize2fs, which growing a box's disk uses to grow the
 # filesystem on it (scripts/agent/grow-disk.sh).
 # The files Docker manages during a build (/etc/hostname, /etc/hosts,
@@ -44,6 +45,13 @@ curl -fsSL -o /usr/local/bin/herdr \
   "https://github.com/herdrdev/herdr/releases/download/v${HERDR_VERSION}/herdr-linux-${herdr_arch}"
 echo "${herdr_sha}  /usr/local/bin/herdr" | sha256sum -c -
 chmod 0755 /usr/local/bin/herdr
+# No first-run screen: without `onboarding = false` every attach opens on
+# herdr's welcome and integrations picker until someone dismisses it.
+# `boxctl claude` installs the agent's integration itself, and sets the
+# same line on boxes from images older than this one (boxctl-cli's
+# herdrMux.setup), leaving it alone where it's already set.
+install -d -m 0755 /root/.config/herdr
+printf '%s\n' '# boxctl: no first-run screen on a box' 'onboarding = false' >/root/.config/herdr/config.toml
 
 # docs/plans/guest-clock-sync.md
 install -D -m 0644 /boxctl/boxctl-resume.conf /etc/chrony/conf.d/boxctl-resume.conf
