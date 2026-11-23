@@ -17,8 +17,7 @@ name: build-fc-images
 # virtualization configured. So this workflow deliberately stops at
 # "bake, static-check, publish" -- booting a real VM from a freshly
 # published image to confirm it works is still a manual step run directly
-# on aimax bare metal (see scripts/images/bake-*-image.sh's own "Test
-# directly with: onctl create ..." footer).
+# on aimax bare metal (`onctl create -p fc --rootfs-image <file>`).
 #
 # Which images exist is images/*/image.json (docs/plans/image-catalog.md),
 # not a list here: the plan job asks `boxctl-image matrix` what this push
@@ -27,8 +26,7 @@ name: build-fc-images
 # (rebuild: false). An image is built from images/<image>/Dockerfile
 # (docs/plans/dockerfile-rootfs.md) -- its sources being that directory,
 # whatever it builds from (images/common, an image it's FROM), and
-# cmd/boxctl-image/build.go -- or, until it moves over, by its
-# scripts/images/bake-<image>-image.sh. Publishing is one generic
+# cmd/boxctl-image/build.go. Publishing is one generic
 # `boxctl-image publish` that uploads the image by sha and writes its
 # catalog/<image>.json manifest.
 
@@ -40,7 +38,6 @@ on:
     branches: [main]
     paths:
       - "images/**"
-      - "scripts/images/bake-*-image.sh"
       - "cmd/boxctl-image/build.go"
       - ".github/workflows/build-fc-images.yml"
   workflow_dispatch:
@@ -114,24 +111,19 @@ jobs:
 
       - name: Build ${{ matrix.image }} image
         if: matrix.rebuild
-        # From images/<image>/Dockerfile when it has one -- the Docker
-        # build unprivileged (the runner user is in the docker group, and
-        # buildx may be a per-user plugin root doesn't have), then
-        # unpacking it and making the ext4 as root, since the tree is
-        # root-owned. Otherwise its bake script, as before. See
+        # From images/<image>/Dockerfile -- the Docker build unprivileged
+        # (the runner user is in the docker group, and buildx may be a
+        # per-user plugin root doesn't have), then unpacking it and making
+        # the ext4 as root, since the tree is root-owned. See
         # docs/plans/dockerfile-rootfs.md.
         env:
           IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
-          if [ -f "images/$IMAGE/Dockerfile" ]; then
-            command -v mkfs.ext4 >/dev/null || sudo apt-get install -y -qq e2fsprogs
-            "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -tar-only "$RUNNER_TEMP/rootfs.tar"
-            sudo "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -from-tar "$RUNNER_TEMP/rootfs.tar"
-            rm -f "$RUNNER_TEMP/rootfs.tar"
-          else
-            sudo "$RUNNER_TEMP/boxctl-image" build "$IMAGE"
-          fi
+          command -v mkfs.ext4 >/dev/null || sudo apt-get install -y -qq e2fsprogs
+          "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -tar-only "$RUNNER_TEMP/rootfs.tar"
+          sudo "$RUNNER_TEMP/boxctl-image" build "$IMAGE" -from-tar "$RUNNER_TEMP/rootfs.tar"
+          rm -f "$RUNNER_TEMP/rootfs.tar"
 
       - name: Static smoke test
         if: matrix.rebuild
@@ -163,14 +155,15 @@ jobs:
           sudo --preserve-env=CF_ACCESS_KEY,CF_SECRET_ACCESS_KEY,CF_S3_ENDPOINT "$RUNNER_TEMP/boxctl-image" "${args[@]}"
 
       - name: Publish ${{ matrix.image }} to the public bucket
-        # The Dockerfile-built images are also published to a bucket anyone
-        # can download from (docs/plans/public-images.md) -- the same
-        # publish, to another bucket, so the server's own keeps every
-        # image. Not the bake-script ones (desktop, vscode), which haven't
-        # been reviewed for it. Off until PUBLIC_IMAGES_BUCKET is set. The
-        # first publish of an image there has to be a rebuild: a
-        # manifest-only one has no generation to describe.
-        if: vars.PUBLIC_IMAGES_BUCKET != '' && hashFiles(format('images/{0}/Dockerfile', matrix.image)) != ''
+        # The images are also published to a bucket anyone can download
+        # from (docs/plans/public-images.md) -- the same publish, to
+        # another bucket, so the server's own keeps every image. Not
+        # desktop and vscode, which haven't been reviewed for it (VS
+        # Code's redistribution terms, for one). Off until
+        # PUBLIC_IMAGES_BUCKET is set. The first publish of an image
+        # there has to be a rebuild: a manifest-only one has no
+        # generation to describe.
+        if: vars.PUBLIC_IMAGES_BUCKET != '' && !contains(fromJSON('["desktop", "vscode"]'), matrix.image)
         env:
           CF_BUCKET: ${{ vars.PUBLIC_IMAGES_BUCKET }}
           CF_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_ACCESS_KEY }}

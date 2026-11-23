@@ -60,7 +60,7 @@ To add an image, add `images/<name>/image.json` and
 a pull request.
 
 Everything else -- image statuses, converting a container image, the
-kernel, the images built by bake scripts, CI and its secrets -- is in
+kernel, CI and its secrets -- is in
 [docs/reference.md](docs/reference.md); the designs are in
 [docs/plans](docs/plans).
 

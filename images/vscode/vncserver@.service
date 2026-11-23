@@ -1,0 +1,28 @@
+# desktop's TigerVNC unit (see images/desktop/vncserver@.service for the
+# flags), run as boxctl rather than root.
+#
+# Nothing logs boxctl in -- no display manager, no PAM session -- so
+# nothing makes its XDG_RUNTIME_DIR, which XFCE's dbus and polkit need.
+# The unit makes it, as root: the leading + runs those two lines without
+# User=, since /run/user isn't boxctl's to write to (without it, the unit
+# crash-loops on "Permission denied").
+[Unit]
+Description=TigerVNC server on display %i
+After=network.target
+
+[Service]
+Type=simple
+User=boxctl
+Group=boxctl
+WorkingDirectory=/home/boxctl
+Environment=HOME=/home/boxctl
+Environment=USER=boxctl
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=+/bin/mkdir -p /run/user/1000
+ExecStartPre=+/bin/chown boxctl:boxctl /run/user/1000
+ExecStart=/usr/bin/vncserver -fg -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE :%i
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

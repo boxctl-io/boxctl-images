@@ -8,8 +8,9 @@ images published to R2), the boxctl-vms server (which imports
 (the `claude-agent` OCI image on ghcr).
 
 - `images/<name>/`: one directory per image -- `image.json` (the catalog
-  definition) and its `Dockerfile`, or a `scripts/images/bake-<name>-image.sh`
-  for the ones not moved to a Dockerfile yet. `images/common/install.sh`
+  definition) and its `Dockerfile`; `validate` rejects a rootfs image
+  without one. Only the kernel has a bake script
+  (`scripts/images/bake-kernel-image.sh`). `images/common/install.sh`
   is what every box rootfs needs; every Dockerfile runs it first.
 - `cmd/boxctl-image`: `validate`, `matrix`, `build`, `convert`,
   `publish`. See README.md, docs/reference.md and docs/plans/.

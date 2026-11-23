@@ -1,7 +1,7 @@
 # Building box images from Dockerfiles
 
-> **Status:** `debian-slim` and `ubuntu-26.04` are built this way;
-> `desktop` and `vscode` still use their bake scripts. The layout and
+> **Status:** every rootfs image is built this way; the bake scripts
+> are gone but the kernel's. The layout and
 > pipeline below describe what's built (`cmd/boxctl-image/build.go`),
 > not the first draft of this plan.
 
@@ -67,8 +67,8 @@ images/
   debian-slim/image.json     catalog fields + size_mib
   debian-slim/Dockerfile     FROM debian:trixie-slim@sha256:... + common/install.sh
   ubuntu-26.04/Dockerfile    FROM ubuntu:26.04@sha256:...      + common/install.sh
-  desktop/Dockerfile         (next) FROM ubuntu:24.04@... + install.sh + XFCE/TigerVNC/Firefox
-  vscode/Dockerfile          (next) FROM desktop + VS Code + Python + desktop user
+  desktop/Dockerfile         FROM ubuntu:24.04@...             + install.sh + XFCE/TigerVNC/Firefox
+  vscode/Dockerfile          FROM desktop + VS Code + Python + desktop user
 ```
 
 Every Dockerfile starts the same way:
@@ -94,9 +94,9 @@ build graph can't drift from the Dockerfiles. (Bake target names can't
 contain dots, so `ubuntu-26.04` is the target `ubuntu-26_04`.)
 
 `image.json` keeps only the catalog's fields plus `size_mib`, the ext4's
-size. The build recipe is the Dockerfile. `validate` requires an image to
-have a Dockerfile or a bake script, never both, and a Dockerfile image a
-`size_mib` no bigger than the smallest box disk.
+size. The build recipe is the Dockerfile. `validate` requires every
+rootfs image to have one, and a `size_mib` no bigger than the smallest
+box disk.
 
 **SSH host keys are generated on first boot, not baked.** The bake
 scripts ran `ssh-keygen -A` at bake time, so every box from an image
@@ -201,13 +201,12 @@ Delete each `bake-<name>-image.sh` once its image has switched.
 
 `build-fc-images.yml`:
 
-- `plan` job: `boxctl-image matrix` -- a Dockerfile image rebuilds when
-  anything in its directory but `image.json` changes, or in a directory
-  it builds from (transitively), or `cmd/boxctl-image/build.go` (the
-  fix-ups are part of every image). A bake-script image rebuilds when its
-  script changes.
-- `bake-and-publish`: the build step runs `boxctl-image build` for
-  either kind; smoke test and publish are unchanged.
+- `plan` job: `boxctl-image matrix` -- an image rebuilds when anything
+  in its directory but `image.json` changes, or in a directory it builds
+  from (transitively), or `cmd/boxctl-image/build.go` (the fix-ups are
+  part of every image).
+- `bake-and-publish`: the build step runs `boxctl-image build`; smoke
+  test and publish are unchanged.
 - Dependabot's `docker` ecosystem over `images/*` bumps the pinned base
   digests; the bump is a change to the image's directory, so merging it
   rebuilds and republishes.
@@ -239,7 +238,6 @@ each need their own design:
 ## Sequencing
 
 The catalog shipped first (#117, #118) on the bake scripts; this plan
-swaps builders behind the same `publish`, image by image. Done:
-`debian-slim`, `ubuntu-26.04`. Next: `desktop`, then `vscode`
-(`FROM desktop`, with its non-root desktop user) -- each deleting its
-`bake-<name>-image.sh` once its Docker-built image boots on aimax.
+swaps builders behind the same `publish`, image by image: `debian-slim`
+and `ubuntu-26.04` first, then `desktop` and `vscode` (`FROM desktop`,
+with its non-root desktop user), whose bake scripts went with them.

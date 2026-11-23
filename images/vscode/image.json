@@ -7,6 +7,7 @@
   "description": "XFCE desktop + VNC (as a regular user, not root) with VS Code and Python3/pip already installed.",
   "os": "ubuntu",
   "features": ["desktop"],
+  "size_mib": 8192,
   "status": "available",
   "default": false
 }
