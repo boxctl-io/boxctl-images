@@ -38,3 +38,10 @@ RUN install -d -m 0755 /etc/apt/keyrings \
 COPY --chmod=0755 xstartup /root/.vnc/xstartup
 COPY vncserver@.service /etc/systemd/system/
 RUN systemctl enable vncserver@1.service
+
+# lightdm comes in with xfce4's recommends. It's a login screen for a
+# local display, and a box has none: it fails at every boot and leaves
+# the system degraded. VNC starts the session itself, so nothing needs
+# it. Masked rather than purged, so apt doesn't pull in another display
+# manager to satisfy the recommend.
+RUN systemctl mask lightdm
