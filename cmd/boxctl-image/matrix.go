@@ -22,7 +22,7 @@ type matrixEntry struct {
 // change to how images are baked may change every image.
 const workflowFile = ".github/workflows/build-fc-images.yml"
 
-// builderFile rebuilds every Dockerfile image when it changes: its fixups
+// builderFile rebuilds every image when it changes: its fixups
 // are part of each of them.
 const builderFile = "cmd/boxctl-image/build.go"
 
@@ -37,9 +37,9 @@ func built(d imagecatalog.Definition) bool {
 // be diffed). A retired image is never rebuilt, but a change to its
 // definition is still published -- that's how it gets retired.
 //
-// What rebuilds an image: its bake script, or for a Dockerfile image any
-// file in its directory but image.json, or in any directory it builds
-// from (images/common, an image it's FROM), transitively.
+// What rebuilds an image: any file in its directory but image.json, or
+// in any directory it builds from (images/common, an image it's FROM),
+// transitively.
 func planMatrix(imagesDir string, defs []imagecatalog.Definition, changed []string) []matrixEntry {
 	touched := map[string]bool{}
 	for _, f := range changed {
@@ -56,9 +56,6 @@ func planMatrix(imagesDir string, defs []imagecatalog.Definition, changed []stri
 		return false
 	}
 	sourcesChanged := func(d imagecatalog.Definition) bool {
-		if !hasDockerfile(imagesDir, d.Name) {
-			return touched["scripts/images/"+bakeScript(d)]
-		}
 		if touched[builderFile] || underDir(d.Name) {
 			return true
 		}

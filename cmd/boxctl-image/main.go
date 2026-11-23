@@ -11,8 +11,7 @@
 //	boxctl-image publish <name> [-image <path>] [-metadata-only] [-git-sha <sha>]
 //
 // build makes the image at its host path with a <path>.sha256sum sidecar
-// beside it: from images/<name>/Dockerfile (build.go), or by running its
-// scripts/images/bake-<name>-image.sh for an image not moved over yet.
+// beside it, from images/<name>/Dockerfile (build.go).
 // convert makes one from a container image in a registry instead
 // (convert.go); it isn't a catalog image, so nothing publishes it.
 package main
@@ -34,7 +33,7 @@ const usage = `usage:
   boxctl-image validate [-images dir] [-scripts dir]
   boxctl-image list [-images dir]
   boxctl-image matrix [-images dir] [-since ref] [-only a,b|all]
-  boxctl-image build <name> [-images dir] [-scripts dir] [-out path] [-from-tar tar | -tar-only tar | -bake-only json]
+  boxctl-image build <name> [-images dir] [-out path] [-from-tar tar | -tar-only tar | -bake-only json]
   boxctl-image convert <ref> [-images dir] [-name name] [-out path] [-size-mib n] [-no-service] [-from-tar tar | -tar-only tar]
   boxctl-image publish <name> [-images dir] [-image path] [-metadata-only] [-git-sha sha]
 
@@ -75,7 +74,7 @@ func main() {
 func runValidate(args []string) error {
 	fs := flag.NewFlagSet("validate", flag.ExitOnError)
 	imagesDir := fs.String("images", "images", "directory of image definitions")
-	scriptsDir := fs.String("scripts", "scripts/images", "directory of bake scripts")
+	scriptsDir := fs.String("scripts", "scripts/images", "directory of the kernel's bake script")
 	_ = fs.Parse(args)
 
 	defs, err := validate(*imagesDir, *scriptsDir)
@@ -147,7 +146,6 @@ func runBuild(args []string) error {
 	name := args[0]
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	imagesDir := fs.String("images", "images", "directory of image definitions")
-	scriptsDir := fs.String("scripts", "scripts/images", "directory of bake scripts")
 	out := fs.String("out", "", "where the image lands (default: its host path)")
 	fromTar := fs.String("from-tar", "", "skip the Docker build: make the image from this filesystem tar")
 	tarOnly := fs.String("tar-only", "", "stop after the Docker build, leaving the filesystem tar here")
@@ -166,7 +164,7 @@ func runBuild(args []string) error {
 		*out = imagecatalog.HostPath(def)
 	}
 	return newBuilder().build(buildRequest{
-		def: def, imagesDir: *imagesDir, scriptsDir: *scriptsDir,
+		def: def, imagesDir: *imagesDir,
 		out: *out, fromTar: *fromTar, tarOnly: *tarOnly, bakeOnly: *bakeOnly,
 	})
 }

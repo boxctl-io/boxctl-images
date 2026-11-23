@@ -43,10 +43,10 @@ sudo onctl create -n box -p fc --rootfs-image $PWD/debian-slim.ext4 --kernel-ima
 **Public:** every image built from `images/<name>/Dockerfile` (today
 `alpine`, `debian-slim`, `ubuntu-26.04`, `claude-agent`,
 `claude-agent-go`, `openai-agents`) and `boxctl-kernel`, without which
-none of them boots. **Not public:** `desktop` and `vscode`, until their
-bake scripts and VS Code's redistribution terms have been looked at --
-moving one to a Dockerfile makes it public, so that review belongs in
-that PR. `windows-server-2025` is `external` and never published
+none of them boots. **Not public:** `desktop` and `vscode`, until
+they and VS Code's redistribution terms have been looked at. Both are
+built from Dockerfiles now; build-fc-images.yml leaves them out by name,
+and making one public is removing it from that list. `windows-server-2025` is `external` and never published
 anywhere.
 
 ### Why a mirror, and not a move

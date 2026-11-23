@@ -1,0 +1,26 @@
+# TigerVNC on display %i, started at boot.
+#
+# Type=simple with vncserver -fg: Type=forking with a PIDFile was flaky
+# under systemd.
+#
+# -localhost no and -SecurityTypes None: the dashboard's VNC tunnel
+# (boxctl-vms's cmd/boxctl-tunnel-agent) dials the box's own address on
+# port 590%i from the host, not through an SSH session into it, so a
+# localhost-only server can't be reached at all. The flag has to be
+# there: vncserver's wrapper defaults to localhost-only when it's left
+# out. The ticket-gated tunnel is the access control, the same trust
+# boundary every box's SSH port already has on the host's bridge.
+[Unit]
+Description=TigerVNC server on display %i
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/vncserver -fg -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE :%i
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -20,14 +20,12 @@ import (
 	"github.com/boxctl-io/boxctl-images/imagecatalog"
 )
 
-// Building an image: from images/<name>/Dockerfile when it has one (see
-// docs/plans/dockerfile-rootfs.md), and otherwise by running its
-// scripts/images/bake-<name>-image.sh as before. Either way the result
-// is the image at its host path plus the <path>.sha256sum sidecar
-// publish reads -- the seam the catalog depends on, so images move from
-// one build to the other one at a time.
+// Building an image from images/<name>/Dockerfile (see
+// docs/plans/dockerfile-rootfs.md). The result is the image at its host
+// path plus the <path>.sha256sum sidecar publish reads -- the seam the
+// catalog depends on.
 //
-// A Dockerfile build:
+// A build:
 //
 //  1. docker buildx bake, exporting the image's filesystem as a tar --
 //     every layer merged, nothing loaded into the daemon.
@@ -192,10 +190,9 @@ func bakeFile(imagesDir, name string) ([]byte, error) {
 
 // buildRequest is one `boxctl-image build`.
 type buildRequest struct {
-	def        imagecatalog.Definition
-	imagesDir  string
-	scriptsDir string
-	out        string // where the image lands; its sidecar goes beside it
+	def       imagecatalog.Definition
+	imagesDir string
+	out       string // where the image lands; its sidecar goes beside it
 	// fromTar skips the Docker build and starts from this filesystem tar.
 	fromTar string
 	// tarOnly stops after the Docker build, leaving the filesystem tar here.
@@ -233,10 +230,7 @@ func newBuilder() *builder {
 func (b *builder) build(req buildRequest) error {
 	d := req.def
 	if !hasDockerfile(req.imagesDir, d.Name) {
-		if req.fromTar != "" || req.tarOnly != "" || req.bakeOnly != "" {
-			return fmt.Errorf("%s is built by its bake script, not a Dockerfile", d.Name)
-		}
-		return b.run("bash", filepath.Join(req.scriptsDir, bakeScript(d)))
+		return fmt.Errorf("%s has no %s to build it from", d.Name, filepath.Join(req.imagesDir, d.Name, dockerfileName))
 	}
 	if req.bakeOnly != "" {
 		bake, err := bakeFile(req.imagesDir, d.Name)
@@ -334,7 +328,7 @@ func (b *builder) build(req buildRequest) error {
 }
 
 // install moves img to out and writes out's sidecar -- "<sha256> <size>
-// <mtime-nanos>", what bake-*-image.sh write and internal/rootfsdiff.
+// <mtime-nanos>", what bake-kernel-image.sh writes and internal/rootfsdiff.
 // Identity caches -- after it lands: a sidecar must never describe a file
 // other than the one at its path.
 func install(img, out string) error {

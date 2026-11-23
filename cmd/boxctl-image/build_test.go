@@ -308,19 +308,21 @@ func TestResolveInStaysInsideRoot(t *testing.T) {
 	}
 }
 
-func TestBuildRunsTheBakeScriptForImagesWithoutADockerfile(t *testing.T) {
+// Every rootfs is built from its Dockerfile; there's no other way left
+// to build one, so an image without one is an error, not a fallback.
+func TestBuildRefusesAnImageWithoutADockerfile(t *testing.T) {
 	var ran [][]string
 	b := &builder{run: func(name string, args ...string) error {
 		ran = append(ran, append([]string{name}, args...))
 		return nil
 	}}
-	err := b.build(buildRequest{
-		def: find(t, "desktop"), imagesDir: "../../images", scriptsDir: "../../scripts/images", out: filepath.Join(t.TempDir(), "x"),
-	})
-	if err != nil {
-		t.Fatal(err)
+	dir := writeTree(t, map[string]string{"slim/image.json": "{}"})
+	def := find(t, "debian-slim")
+	def.Name = "slim"
+	if err := b.build(buildRequest{def: def, imagesDir: dir, out: filepath.Join(t.TempDir(), "x")}); err == nil {
+		t.Fatal("built an image with no Dockerfile")
 	}
-	if len(ran) != 1 || ran[0][0] != "bash" || ran[0][1] != "../../scripts/images/bake-desktop-image.sh" {
+	if len(ran) != 0 {
 		t.Fatalf("ran %v", ran)
 	}
 }
@@ -333,7 +335,7 @@ func TestBuildExportsTheDockerBuildAsATar(t *testing.T) {
 	}}
 	tar := filepath.Join(t.TempDir(), "rootfs.tar")
 	err := b.build(buildRequest{
-		def: find(t, "debian-slim"), imagesDir: "../../images", scriptsDir: "../../scripts/images",
+		def: find(t, "debian-slim"), imagesDir: "../../images",
 		out: filepath.Join(t.TempDir(), "debian-slim.ext4"), tarOnly: tar,
 	})
 	if err != nil {
@@ -356,7 +358,7 @@ func TestBuildWritesOnlyTheBakeFile(t *testing.T) {
 	}}
 	bake := filepath.Join(t.TempDir(), "bake.json")
 	err := b.build(buildRequest{
-		def: find(t, "claude-agent"), imagesDir: "../../images", scriptsDir: "../../scripts/images",
+		def: find(t, "claude-agent"), imagesDir: "../../images",
 		out: filepath.Join(t.TempDir(), "claude-agent.ext4"), bakeOnly: bake,
 	})
 	if err != nil {
@@ -383,10 +385,6 @@ func TestBuildWritesOnlyTheBakeFile(t *testing.T) {
 	if c := got.Target["debian-slim"].Contexts; !strings.HasSuffix(c["common"], filepath.Join("images", "common")) {
 		t.Errorf("debian-slim contexts %v", c)
 	}
-
-	if err := b.build(buildRequest{def: find(t, "desktop"), imagesDir: "../../images", bakeOnly: bake}); err == nil {
-		t.Fatal("an image without a Dockerfile has no bake file to write")
-	}
 }
 
 func TestValidateRejects(t *testing.T) {
@@ -408,10 +406,11 @@ func TestValidateRejects(t *testing.T) {
 		t.Fatalf("valid tree rejected: %v", err)
 	}
 
-	both := base()
-	both["scripts/bake-slim-image.sh"] = ""
-	neither := base()
-	delete(neither, "images/slim/Dockerfile")
+	bakeScript := base()
+	delete(bakeScript, "images/slim/Dockerfile")
+	bakeScript["scripts/bake-slim-image.sh"] = ""
+	noKernelScript := base()
+	delete(noKernelScript, "scripts/bake-kernel-image.sh")
 	noSize := base()
 	noSize["images/slim/image.json"] = strings.Replace(noSize["images/slim/image.json"], `"size_mib":4096,`, "", 1)
 	tooBig := base()
@@ -420,11 +419,11 @@ func TestValidateRejects(t *testing.T) {
 	cycle["images/slim/Dockerfile"] = "FROM slim\n"
 
 	for name, files := range map[string]map[string]string{
-		"both a Dockerfile and a bake script": both,
-		"neither":                             neither,
-		"no size_mib":                         noSize,
-		"bigger than the smallest disk":       tooBig,
-		"builds from itself":                  cycle,
+		"a bake script, not a Dockerfile": bakeScript,
+		"a kernel with no bake script":    noKernelScript,
+		"no size_mib":                     noSize,
+		"bigger than the smallest disk":   tooBig,
+		"builds from itself":              cycle,
 	} {
 		if err := run(files); err == nil {
 			t.Errorf("%s: accepted", name)

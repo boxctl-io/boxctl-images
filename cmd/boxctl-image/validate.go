@@ -9,9 +9,9 @@ import (
 )
 
 // validate checks every definition and the rules across them, plus how
-// each image is built: from images/<name>/Dockerfile (with a size_mib
-// that fits the smallest box disk) or from its bake script, never both
-// and never neither. Run on every PR by TestRepoImagesValid.
+// each image is built: a rootfs from images/<name>/Dockerfile, with a
+// size_mib that fits the smallest box disk, and the kernel from its bake
+// script. Run on every PR by TestRepoImagesValid.
 func validate(imagesDir, scriptsDir string) ([]imagecatalog.Definition, error) {
 	defs, err := imagecatalog.LoadDefinitions(imagesDir)
 	if err != nil {
@@ -25,41 +25,31 @@ func validate(imagesDir, scriptsDir string) ([]imagecatalog.Definition, error) {
 		if d.Source == imagecatalog.SourceExternal {
 			continue // nothing here builds it
 		}
-		script := filepath.Join(scriptsDir, bakeScript(d))
-		_, err := os.Stat(script)
-		hasScript := err == nil
 		if d.Kind == imagecatalog.KindKernel {
-			if !hasScript {
+			script := filepath.Join(scriptsDir, kernelScript)
+			if _, err := os.Stat(script); err != nil {
 				return nil, fmt.Errorf("%s has no %s", d.Name, script)
 			}
 			continue
 		}
-		switch df := hasDockerfile(imagesDir, d.Name); {
-		case df && hasScript:
-			return nil, fmt.Errorf("%s has both a Dockerfile and %s; delete the script once the Dockerfile replaces it", d.Name, script)
-		case !df && !hasScript:
-			return nil, fmt.Errorf("%s has neither a Dockerfile nor %s", d.Name, script)
-		case df && d.SizeMiB <= 0:
+		switch {
+		case !hasDockerfile(imagesDir, d.Name):
+			return nil, fmt.Errorf("%s has no %s", d.Name, filepath.Join(imagesDir, d.Name, dockerfileName))
+		case d.SizeMiB <= 0:
 			return nil, fmt.Errorf("%s is built from a Dockerfile, so it needs size_mib", d.Name)
-		case df:
-			if d.SizeMiB > minDisk {
-				return nil, fmt.Errorf("%s: size_mib %d is bigger than the smallest box disk (%d MiB)", d.Name, d.SizeMiB, minDisk)
-			}
-			if _, err := bakeFile(imagesDir, d.Name); err != nil {
-				return nil, fmt.Errorf("%s: %w", d.Name, err)
-			}
+		case d.SizeMiB > minDisk:
+			return nil, fmt.Errorf("%s: size_mib %d is bigger than the smallest box disk (%d MiB)", d.Name, d.SizeMiB, minDisk)
+		}
+		if _, err := bakeFile(imagesDir, d.Name); err != nil {
+			return nil, fmt.Errorf("%s: %w", d.Name, err)
 		}
 	}
 	return defs, nil
 }
 
-// bakeScript is the script under scripts/images/ that builds d.
-func bakeScript(d imagecatalog.Definition) string {
-	if d.Kind == imagecatalog.KindKernel {
-		return "bake-kernel-image.sh"
-	}
-	return "bake-" + d.Name + "-image.sh"
-}
+// kernelScript is the script under scripts/images/ that builds the
+// kernel: not a rootfs, so not a Dockerfile (build-fc-kernel.yml runs it).
+const kernelScript = "bake-kernel-image.sh"
 
 // smallestDiskMiB is the smallest disk a box can have; an image bigger
 // than it couldn't boot at that size (onctl won't shrink one).
