@@ -15,6 +15,7 @@ Anyone can download these:
 | `ubuntu-26.04` | Minimal Ubuntu 26.04, SSH only | [83 MB](https://images.boxctl.io/images/latest/ubuntu-26.04.ext4.zst) |
 | `openai-agents` | Debian Slim plus Node.js and the Codex CLI | [438 MB](https://images.boxctl.io/images/latest/openai-agents.ext4.zst) |
 | `claude-agent` | Debian Slim plus git, gh and Claude Code | [510 MB](https://images.boxctl.io/images/latest/claude-agent.ext4.zst) |
+| `desktop` | Ubuntu 24.04 with XFCE, TigerVNC and Firefox, the desktop running at boot | [626 MB](https://images.boxctl.io/images/latest/desktop.ext4.zst) |
 | `claude-agent-go` | `claude-agent` plus Go and gcc | [656 MB](https://images.boxctl.io/images/latest/claude-agent-go.ext4.zst) |
 | `boxctl-kernel` | The guest kernel every image boots with | [11 MB](https://images.boxctl.io/kernel/latest/boxctl-kernel.vmlinux.zst) |
 
