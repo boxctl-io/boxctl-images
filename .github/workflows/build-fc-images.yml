@@ -158,12 +158,13 @@ jobs:
         # The images are also published to a bucket anyone can download
         # from (docs/plans/public-images.md) -- the same publish, to
         # another bucket, so the server's own keeps every image. Not
-        # desktop and vscode, which haven't been reviewed for it (VS
-        # Code's redistribution terms, for one). Off until
+        # vscode: it has Microsoft's VS Code build baked in, whose license
+        # forbids sharing or publishing it (docs/plans/public-images.md).
+        # Off until
         # PUBLIC_IMAGES_BUCKET is set. The first publish of an image
         # there has to be a rebuild: a manifest-only one has no
         # generation to describe.
-        if: vars.PUBLIC_IMAGES_BUCKET != '' && !contains(fromJSON('["desktop", "vscode"]'), matrix.image)
+        if: vars.PUBLIC_IMAGES_BUCKET != '' && matrix.image != 'vscode'
         env:
           CF_BUCKET: ${{ vars.PUBLIC_IMAGES_BUCKET }}
           CF_ACCESS_KEY: ${{ secrets.PUBLIC_IMAGES_ACCESS_KEY }}

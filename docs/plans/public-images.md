@@ -42,19 +42,27 @@ sudo onctl create -n box -p fc --rootfs-image $PWD/debian-slim.ext4 --kernel-ima
 
 **Public:** every image built from `images/<name>/Dockerfile` (today
 `alpine`, `debian-slim`, `ubuntu-26.04`, `claude-agent`,
-`claude-agent-go`, `openai-agents`) and `boxctl-kernel`, without which
-none of them boots. **Not public:** `desktop` and `vscode`, until
-they and VS Code's redistribution terms have been looked at. Both are
-built from Dockerfiles now; build-fc-images.yml leaves them out by name,
-and making one public is removing it from that list. `windows-server-2025` is `external` and never published
+`claude-agent-go`, `openai-agents`, `desktop`) and `boxctl-kernel`,
+without which none of them boots. `desktop` is Ubuntu, XFCE and
+TigerVNC, all open source, plus Mozilla's unmodified Firefox build,
+which may be passed on as it is. **Not public:** `vscode`. It bakes in
+Microsoft's VS Code build (the `code` package), and that build's license
+(https://code.visualstudio.com/license) grants use only "to develop and
+test your applications" and says you may not "share, publish, rent or
+lease the software, or provide the software as a stand-alone offering
+for others to use". The MIT license covers the Code - OSS source, not
+Microsoft's binary. Making it public means replacing `code` with an
+open build such as VSCodium, or installing VS Code on a box's first
+boot rather than in the image. build-fc-images.yml leaves it out by
+name. `windows-server-2025` is `external` and never published
 anywhere.
 
 ### Why a mirror, and not a move
 
 The first draft moved image publishing to the new bucket and pointed the
 server at it. With only some images public that no longer works: the
-server reads its whole catalog from one bucket, and `desktop` and
-`vscode` would be in another. Publishing to both instead means:
+server reads its whole catalog from one bucket, and `vscode` would be
+in another. Publishing to both instead means:
 
 - **boxctl-vms doesn't change at all** -- no configuration, no code. It
   keeps reading `boxctl-vms`, where every image still is. (The draft's
@@ -137,4 +145,4 @@ if the images should stop being reachable.
 - `catalog/index.json`, a list of what is published (a public reader
   can't list the bucket). Worth adding with the first consumer that
   needs to discover images rather than name them.
-- `desktop` and `vscode`, and the agent bundle.
+- `vscode` (see above), and the agent bundle.
